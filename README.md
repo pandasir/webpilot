@@ -4,7 +4,9 @@
 
 Codex 根据需求规划和诊断；本地执行器负责真实 Chromium 操作、明确断言、证据与不可变用例。保存的回归用例可通过 CLI 无模型重跑，也可导出独立 Playwright 测试包。
 
-首次使用先看[快速开始](#快速开始)；已安装插件可直接看[使用指南](#使用指南)，命令行与 CI 接入见[直接使用 WebPilot CLI](#直接使用-webpilot-cli)。
+本地测试中心汇总多个聊天和项目的测试进度，支持浏览器直播、步骤截图、报告与录像查看、两条运行并排观看，以及运行重命名、归档永久保存和批量管理。
+
+首次使用先看[快速开始](#快速开始)；已安装插件可直接看[使用指南](#使用指南)，查看与管理历史测试见[本地测试中心](#本地测试中心)，命令行与 CI 接入见[直接使用 WebPilot CLI](#直接使用-webpilot-cli)。
 
 ## 快速开始
 
@@ -113,7 +115,7 @@ PowerShell 中使用 `&` 调用变量里的程序路径，路径带空格也适�
 
 > $webpilot:verify 验收 http://localhost:3000 的登录表单：错误密码显示 Invalid password，并保持在登录页；保存回归用例。
 
-将 URL 和预期提示替换成自己项目的实际内容。如何准备需求、查看结果、复跑和导出，见下方[使用指南](#使用指南)。
+将 URL 和预期提示替换成自己项目的实际内容。执行前会打开本地测试中心，结束后通过回复中的“本次测试详情”链接查看这次运行。如何准备需求、查看结果、复跑和导出，见下方[使用指南](#使用指南)。
 
 ### 安装常见问题
 
@@ -151,7 +153,7 @@ PowerShell 中使用 `&` 调用变量里的程序路径，路径带空格也适�
 
 例如，项目实际要求错误密码显示 `Invalid password`，可复制以下需求并替换地址、字段名称和提示文案：
 
-> $webpilot:verify 验收 http://localhost:3000/login 的登录功能：用测试邮箱和错误密码提交后，应显示“Invalid password”，地址仍为 http://localhost:3000/login；请使用真实浏览器执行，保存 ID 为 invalid-password 的回归用例，并给出运行 ID、用例 ID/版本、中文报告路径和录像播放路径。
+> $webpilot:verify 验收 http://localhost:3000/login 的登录功能：用测试邮箱和错误密码提交后，应显示“Invalid password”，地址仍为 http://localhost:3000/login；请使用真实浏览器执行，保存 ID 为 invalid-password 的回归用例，并给出可点击的“本次测试详情”链接、运行 ID、用例 ID/版本、中文报告路径和录像播放路径。
 
 Codex 会检查目标和运行环境、根据需求与页面观察生成步骤，再执行操作和断言。你通常无需自己写选择器或计划 JSON。要求保存时，用例需在独立浏览器上下文中再次稳定通过，才能成为正式回归用例；未满足条件的内容保留为草稿或缺口。保存验证可能会再次提交表单或触发业务操作，因此要准备可重复使用的测试数据。
 
@@ -200,7 +202,7 @@ $webpilot:verify
 
 修改页面代码后，在同一聊天或能访问这些资产的新聊天中发送：
 
-> $webpilot:replay 重跑已保存的 invalid-password 第 1 版，目标为 http://localhost:3000/login；保持原有预期，报告运行 ID、各步骤结果和录像播放路径。
+> $webpilot:replay 重跑已保存的 invalid-password 第 1 版，目标为 http://localhost:3000/login；保持原有预期，给出本次重跑的“本次测试详情”链接、运行 ID、各步骤结果和录像播放路径。
 
 也可指定一次完整运行作为复跑依据：
 
@@ -216,7 +218,7 @@ $webpilot:verify
 
 ### 怎样看报告、截图和录像
 
-WebPilot 会启动一个共享的本地测试中心。多个聊天或 CLI 同时测试时，同一个地址能查看各自实时进度、步骤截图和浏览器直播；结束后继续查看报告和录像，支持两条运行并排观看。verify/replay 工作流在执行前打开看板，也可运行 `node dist/cli/index.js dashboard open`。CLI 使用 `--no-open` 避免自动弹页，`--no-dashboard` 禁用本次接入；`target.evidence.live:false` 独立关闭直播。直播可能包含未经脱敏的本地敏感画面。完整说明见 [本地测试中心](docs/dashboard.md)。
+verify/replay 在执行前打开本地测试中心，最终回复附上可点击的“本次测试详情”链接，直接进入这次运行的时间线、截图、报告和录像。通过、失败、受阻或无法确定时均应提供链接；重跑后使用新运行的详情链接。显式禁用测试中心或无法取得链接时，回复会说明原因。
 
 完整测试运行会保存 `report.md` 和 `report.json`；报告包含运行 ID、目标、视口、覆盖范围、缺口、用例版本、步骤结果、可用证据与复现入口。可要求 Codex：“打开刚才的中文测试报告，并给出失败步骤的截图链接。”
 
@@ -231,7 +233,45 @@ WebPilot 会启动一个共享的本地测试中心。多个聊天或 CLI 同时
 
 观看已经录好的过程，可发送：“给我运行 RUN_ID 的录像播放路径。”用浏览器打开返回的 `playbackPath`（本地 `recordings.html`）即可播放、暂停和拖动进度，**无需调用 replay 重跑**。录像在运行结束、浏览器上下文关闭后定稿；缺失时以报告中的原因说明为准。
 
-录像默认开启、仅保存在本机，未经脱敏，默认保留 7 天。需要关闭时可在验收需求中说明“本次不录制流程录像”，对应 `target.evidence.video:false`。截图和页面快照采用独立的脱敏配置，详情见[报告说明](docs/reporting.md)。
+录像默认开启、仅保存在本机，未经脱敏，随运行按保留期清理，默认 7 天；在测试中心归档后永久保存，详见下节。需要关闭时可在验收需求中说明“本次不录制流程录像”，对应 `target.evidence.video:false`。截图和页面快照采用独立的脱敏配置，详情见[报告说明](docs/reporting.md)。
+
+### 本地测试中心
+
+同一系统用户的多个聊天、项目和 CLI 共用一个本地测试中心，即使用不同数据目录，测试也能汇总到同一个页面。运行以下命令可手动打开或查看状态；地址以返回结果为准：
+
+```sh
+node dist/cli/index.js dashboard open
+node dist/cli/index.js dashboard status
+
+# 直接查看某次运行，或在关闭页面后强制重新打开
+node dist/cli/index.js dashboard open --run RUN_ID
+node dist/cli/index.js dashboard open --force
+
+# 导入旧数据目录中的历史记录
+node dist/cli/index.js dashboard import --data-dir /path/to/older-webpilot-data
+```
+
+自动打开会跨聊天去重：本次服务已经打开过页面时，后续测试加入现有看板，并返回链接。主动关闭页面后可点击链接，或用 `--force` 再次弹出页面。关闭网页不会停止测试；测试结束后服务继续提供历史查看。无需继续使用时，可执行 `node dist/cli/index.js dashboard stop`，该命令不会取消正在执行的测试。
+
+**查看测试过程**：侧栏提供“所有运行”“正在执行”“失败记录”和“已归档”入口。总览支持按运行名称、项目或目标搜索、按状态筛选和分页；进入详情可查看执行时间线、步骤预期与实际结果、实时画面、截图、报告和录像。截图支持点击放大、原始尺寸查看；在列表勾选两条运行后可“并排观看”。窄屏使用纵向布局。
+
+固定计划显示用例完成数量；增量浏览器探索只显示已执行步骤，不显示推测的完成百分比，正常关闭探索也不代表正式验收通过。直播断线、执行器失联和业务断言失败分别呈现。
+
+**管理运行记录**：在运行列表或详情的 `⋯` 菜单中操作：
+
+| 操作 | 使用方式与结果 |
+|---|---|
+| 重命名 | 选择“重命名”，输入 1–120 字符的名称并保存；执行中也可改名。显示名称会同步到列表、搜索和详情，原报告、结果与证据保持原样。 |
+| 归档并永久保存 | 已结束且可管理的运行移入“已归档”，保留已有报告、截图、录像和原详情链接；自动清理与 `prune --days` 均跳过该运行。 |
+| 恢复到当前记录 | 在“已归档”中恢复，或归档后点击“撤销”；恢复后仍永久保存。 |
+| 删除… | 弹窗核对运行名称后，点击“永久删除”才会删除报告、截图、录像和执行记录，无法恢复；已保存回归用例、项目文件和独立导出包保留。 |
+| 批量管理 | 点击“批量管理”，勾选多条运行或“全选当前页”，再批量归档、恢复或确认删除；不受并排观看的两条限制。 |
+
+执行中、尚在采集证据或清理中，以及未确认终止的失联运行不可归档或删除，菜单会显示原因。切换范围、筛选、搜索或分页会清空批量选择；批量操作逐项反馈结果，失败项可重试。归档只保留已有文件，不恢复之前缺失或过期的证据。
+
+**控制自动打开和直播**：CLI 使用 `--no-open` 保留进度登记但不自动弹页，`--no-dashboard` 禁用本次执行的看板接入。`target.evidence.live:false` 独立关闭直播，`target.evidence.video:false` 关闭录像。直播仅在有人观看时采集，画面可能包含未经脱敏的本地敏感内容。
+
+共享服务目录独立于测试资产目录：`--data-dir` / `WEBPILOT_DATA_DIR` 指定测试资产，`--dashboard-dir` / `WEBPILOT_DASHBOARD_DIR` 隔离看板服务状态。完整配置、访问机制与恢复规则见[本地测试中心说明](docs/dashboard.md)。
 
 ### 导出给项目或 CI 独立运行
 
@@ -293,11 +333,10 @@ CLI 退出码：`0` 稳定完整通过，`1` 正式断言失败，`2` 受阻、�
 - passed / failed / blocked / inconclusive，保留失败重试与不稳定标记。
 - 独立角色 context、外部登录态、数据 prepare/cleanup、服务所有权管理。
 - JSON/Markdown 报告、脱敏快照与截图；所有浏览器尝试默认录制本地 WebM 流程录像，报告提供播放器入口。原始敏感 trace 默认关闭，仅显式本地保留。
+- 跨聊天与项目共享的本地测试中心，实时进度与浏览器直播、截图放大、两条运行并排观看；支持运行重命名、归档永久保存及批量管理。
 - 草稿及不可变用例版本；晋升前独立重跑；业务标准修改需新依据与采纳记录。
 
 首版使用 Chromium；Canvas 视觉操作、移动硬件等价、多浏览器和穷尽全站覆盖尚未实现。应用本身的启动环境、业务预期、登录及数据准备仍需提供；“通用”指框架无关的接入与执行能力。
-
-流程录像在运行结束后可通过 `playbackPath` 打开本地 `recordings.html` 观看，支持播放、暂停和拖动进度。通过、失败、重试和弹出页面均保留录像；默认保存 7 天。录像未经脱敏，只保存在本机；设置 `target.evidence.video:false` 或项目配置的 `evidence.video:false` 关闭。详情见 [录像配置](docs/project.md) 和 [报告说明](docs/reporting.md)。
 
 ## 开发与验证
 
@@ -309,4 +348,4 @@ node scripts/compatibility-check.mjs
 node scripts/host-check.mjs .webpilot/marketplace
 ```
 
-测试需要 loopback 服务和 Chromium 进程权限。五类真实样例及缺陷集结果见 [兼容记录](docs/compatibility.md)。完整接口见 [工具/CLI](docs/interfaces.md)，另有 [接入](docs/project.md)、[规划](docs/planning.md)、[报告](docs/reporting.md)、[资产](docs/assets.md) 与 [独立导出](docs/export.md)。
+测试需要 loopback 服务和 Chromium 进程权限。五类真实样例及缺陷集结果见 [兼容记录](docs/compatibility.md)；测试中心的专项验证见 [实时看板验收](docs/dashboard-acceptance.md)、[工作台界面验收](docs/workspace-ui-acceptance.md)、[运行管理验收](docs/run-management-acceptance.md) 和 [运行标题验收](docs/run-title-acceptance.md)。完整接口见 [工具/CLI](docs/interfaces.md)，另有 [接入](docs/project.md)、[规划](docs/planning.md)、[报告](docs/reporting.md)、[资产](docs/assets.md) 与 [独立导出](docs/export.md)。
