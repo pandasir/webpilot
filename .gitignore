@@ -7,3 +7,5 @@ playwright-report/
 .DS_Store
 .idea/
 .next/
+.codex/
+openspec/
