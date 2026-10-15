@@ -4,6 +4,8 @@
 
 Codex 根据需求规划和诊断；本地执行器负责真实 Chromium 操作、明确断言、证据与不可变用例。保存的回归用例可通过 CLI 无模型重跑，也可导出独立 Playwright 测试包。
 
+首次使用先看[快速开始](#快速开始)；已安装插件可直接看[使用指南](#使用指南)，命令行与 CI 接入见[直接使用 WebPilot CLI](#直接使用-webpilot-cli)。
+
 ## 快速开始
 
 ### 推荐：一句话让 Codex 安装（macOS / Windows）
@@ -107,11 +109,11 @@ PowerShell 中使用 `&` 调用变量里的程序路径，路径带空格也适�
 
 ### 3. 在新聊天中验收前端
 
-先启动待测前端服务，确认 URL 可访问，再在新 Codex 聊天调用 `$webpilot:verify`，例如：
+先启动待测前端服务，确认 URL 可访问，再在新 Codex 聊天发送：
 
-> 验收 http://localhost:3000 的登录表单：错误密码显示 Invalid password，并保持在登录页；保存回归用例。
+> $webpilot:verify 验收 http://localhost:3000 的登录表单：错误密码显示 Invalid password，并保持在登录页；保存回归用例。
 
-另有 `$webpilot:replay`、`$webpilot:diagnose`、`$webpilot:export`。插件不通过生命周期 hook 自动运行；在修改代码任务中明确要求验收即可。宿主的安装和加载能力存在版本差异，见 [安装说明](docs/installation.md)。
+将 URL 和预期提示替换成自己项目的实际内容。如何准备需求、查看结果、复跑和导出，见下方[使用指南](#使用指南)。
 
 ### 安装常见问题
 
@@ -127,15 +129,160 @@ PowerShell 中使用 `&` 调用变量里的程序路径，路径带空格也适�
 
 更新、卸载、回滚和更详细的宿主检查见 [安装说明](docs/installation.md)；插件机制参考 [OpenAI 官方插件文档](https://developers.openai.com/codex/plugins)，Windows 环境参考 [OpenAI 官方 Windows 指南](https://developers.openai.com/codex/windows)。
 
-### 直接使用 WebPilot CLI
+## 使用指南
 
-直接使用 CLI：准备 [计划与绑定文件](docs/interfaces.md)，然后运行：
+### 先选要做的事
+
+在安装后新建的 Codex 聊天里发送需求即可；下面的 `$webpilot:...` 是聊天中的 Skill 调用写法，不是终端命令。
+
+| 你想做什么 | 使用哪个 Skill | 需要提供什么 |
+|---|---|---|
+| 验收新功能或本次改动 | `$webpilot:verify` | 页面 URL、操作流程、预期结果；可要求保存回归用例 |
+| 改完代码后重跑已有用例 | `$webpilot:replay` | 用例 ID 和版本，或先前运行 ID；当前 URL 和必要运行参数 |
+| 分析一次失败 | `$webpilot:diagnose` | 失败的运行 ID，或能定位该运行的报告路径 |
+| 生成项目或 CI 可独立运行的测试 | `$webpilot:export` | 要导出的用例/计划、一个新的输出目录 |
+
+### 第一次验收：从打开项目到查看结果
+
+1. 在 Codex 中打开**待测前端项目**。WebPilot 安装在本机即可，待测项目无需安装 WebPilot 依赖。
+2. 启动项目及其必要后端，确认浏览器能打开目标 URL。也可提供已经运行的测试环境 URL；只有 URL、没有源码同样能测页面行为。
+3. 告诉 Codex 要测什么、怎样才算正确，以及需要的测试身份或数据。
+4. 查看本次覆盖范围、每项结论和证据；如需后续复跑，明确要求保存回归用例。
+
+例如，项目实际要求错误密码显示 `Invalid password`，可复制以下需求并替换地址、字段名称和提示文案：
+
+> $webpilot:verify 验收 http://localhost:3000/login 的登录功能：用测试邮箱和错误密码提交后，应显示“Invalid password”，地址仍为 http://localhost:3000/login；请使用真实浏览器执行，保存 ID 为 invalid-password 的回归用例，并给出运行 ID、用例 ID/版本、中文报告路径和录像播放路径。
+
+Codex 会检查目标和运行环境、根据需求与页面观察生成步骤，再执行操作和断言。你通常无需自己写选择器或计划 JSON。要求保存时，用例需在独立浏览器上下文中再次稳定通过，才能成为正式回归用例；未满足条件的内容保留为草稿或缺口。保存验证可能会再次提交表单或触发业务操作，因此要准备可重复使用的测试数据。
+
+**需求写得越明确，验收结论越有依据。**建议提供以下信息；不需要的项可以省略：
+
+```text
+$webpilot:verify
+目标：http://localhost:3000/products
+范围：商品搜索和分类筛选
+前置条件：测试环境已有商品“蓝色杯子”，属于“家居”分类
+操作与预期：
+1. 搜索“蓝色杯子”，列表中应出现该商品。
+2. 选择“家居”，结果应保留该商品。
+3. 清空搜索与分类，列表应恢复初始结果。
+保存：保存可重复执行的回归用例。
+交付：中文测试结论、未覆盖项、运行 ID、用例版本、报告与录像路径。
+```
+
+如果只说“帮我测试这个页面”，Codex 可以观察页面并提出检查项；未获需求或用户确认支持的业务预期仍是候选，不能据此宣布正式验收通过。
+
+### 常见使用场景
+
+**改完代码，立即验收**：可以把实现和验收写在同一条任务中。插件不通过生命周期 hook 自动运行，需要明确要求使用 WebPilot。
+
+> 修复商品列表的筛选问题，然后用 $webpilot:verify 验收 http://localhost:3000/products：选择“家居”后只显示该分类商品，清空筛选后恢复初始列表；保存回归用例并给出结果。
+
+**服务尚未启动**：告诉 Codex 项目位置、要启动的应用和启动方式；多应用仓库需要指定应用。WebPilot 会检查启动候选，发现候选不代表已经执行启动，目标项目缺少的依赖也需要另行准备。
+
+> $webpilot:verify 验收当前仓库的 apps/shop 应用，先检查 package.json 的开发启动命令并启动必要服务，使用启动后的实际 URL 测试搜索“蓝色杯子”能找到该商品；后端地址使用项目现有测试配置，缺少配置时明确报告阻塞。
+
+**只有网站 URL**：可直接验收浏览器能访问的页面；没有源码时，报告会说明无法分析代码改动和源码根因。
+
+> $webpilot:verify 验收 https://staging.example.com/help：搜索“退款”后，结果中应出现“退款说明”；只覆盖这个查询流程。
+
+**需要登录或测试数据**：指定测试角色、登录成功的可观察标志、数据准备与清理方式。已登录的日常浏览器不会自动成为 WebPilot 的登录态；需提供测试登录流程或外部登录态引用。账号、文件等可通过运行时 bindings 提供，具体配置见[项目接入](docs/project.md)和[接口说明](docs/interfaces.md)。
+
+> $webpilot:verify 验收测试环境的订单页，使用 buyer 测试角色，先确认页面显示“我的订单”再继续；创建一条测试订单后应能在列表中找到它，结束后用项目的测试清理脚本移除本次数据；先检查身份和数据配置是否齐备。
+
+**检查窄屏布局**：可指定视口，但这代表浏览器视口检查，不等于真实移动设备验收。
+
+> $webpilot:verify 以 390×844 视口验收 http://localhost:3000：点击菜单按钮后导航列表应可见，再次点击后应隐藏；报告中标明本次视口。
+
+### 保存后，怎样重跑和诊断
+
+记下首次验收返回的**用例 ID、版本、运行 ID 和存储位置**。示例中的 `invalid-password`、版本 `1` 和 `RUN_ID` 都应替换为实际返回的值；若上一步没有保存成功，需先完成用例保存。
+
+修改页面代码后，在同一聊天或能访问这些资产的新聊天中发送：
+
+> $webpilot:replay 重跑已保存的 invalid-password 第 1 版，目标为 http://localhost:3000/login；保持原有预期，报告运行 ID、各步骤结果和录像播放路径。
+
+也可指定一次完整运行作为复跑依据：
+
+> $webpilot:replay 重跑运行 RUN_ID 对应的测试计划，目标改为 http://localhost:3001/login，使用本次提供的测试环境参数。
+
+重跑会重新操作浏览器。目标地址、测试身份、文件和数据准备仍需可用；缺失时会报告阻塞。更换登录态、端口或测试数据不意味着可以修改原用例的业务预期。用例版本不可覆盖；正式需求改变时，应说明新依据并保存新版本。
+
+失败后先诊断，再按需要修复：
+
+> $webpilot:diagnose 分析运行 RUN_ID，列出失败步骤的预期、实际结果和证据，区分已确认事实与可能原因，并给出复现方法。
+
+需要一起修代码时可追加：“修复已确认的问题，然后用原用例复跑。”单独诊断不会自动授权修改产品代码，也不应通过放宽断言掩盖失败。
+
+### 怎样看报告、截图和录像
+
+完整测试运行会保存 `report.md` 和 `report.json`；报告包含运行 ID、目标、视口、覆盖范围、缺口、用例版本、步骤结果、可用证据与复现入口。可要求 Codex：“打开刚才的中文测试报告，并给出失败步骤的截图链接。”
+
+| 状态 | 表示什么 | 接下来怎么做 |
+|---|---|---|
+| `passed`（通过） | 本次要求的正式断言均已满足 | 结合覆盖范围判断是否足够，必要时保存用例 |
+| `failed`（失败） | 实际结果违反明确预期 | 用运行 ID 诊断，修复后按原用例复跑 |
+| `blocked`（受阻） | 环境、权限、身份或数据阻止执行 | 补齐对应条件后重跑 |
+| `inconclusive`（无法确定） | 预期、证据或能力不足，或执行未完成 | 补充预期、消除定位歧义或解决报告中的缺口 |
+
+重试后才通过的结果会标记为不稳定，不能当成稳定通过；没有覆盖的页面和流程也不属于本次通过范围。
+
+观看已经录好的过程，可发送：“给我运行 RUN_ID 的录像播放路径。”用浏览器打开返回的 `playbackPath`（本地 `recordings.html`）即可播放、暂停和拖动进度，**无需调用 replay 重跑**。录像在运行结束、浏览器上下文关闭后定稿；缺失时以报告中的原因说明为准。
+
+录像默认开启、仅保存在本机，未经脱敏，默认保留 7 天。需要关闭时可在验收需求中说明“本次不录制流程录像”，对应 `target.evidence.video:false`。截图和页面快照采用独立的脱敏配置，详情见[报告说明](docs/reporting.md)。
+
+### 导出给项目或 CI 独立运行
+
+当你希望离开 Codex 也能执行这些回归测试时，使用导出功能。输出目录必须是**尚不存在的新目录**：
+
+> $webpilot:export 将运行 RUN_ID 的测试计划导出到当前项目下尚不存在的 tests/webpilot-login 目录，保留原断言和等待条件，列出外部登录态、数据和配置要求，并在相同目标及等价测试数据下验证导出包。
+
+导出目录包含测试文件、配置、README 和运行内核快照。独立执行需要 Node.js、浏览器及其依赖，不需要 WebPilot 插件或模型凭证。进入返回的输出目录后，按包内 README 安装和执行，例如 macOS：
 
 ```sh
-node dist/cli/index.js run --plan plan.json --bindings /path/to/bindings.json
-node dist/cli/index.js replay --run RUN_ID
-node dist/cli/index.js export --run RUN_ID --out /path/to/new-tests
+npm install --ignore-scripts
+npx playwright install chromium
+BASE_URL=http://localhost:3000 npm test
 ```
+
+Windows PowerShell：
+
+```powershell
+npm.cmd install --ignore-scripts
+npx.cmd playwright install chromium
+$env:BASE_URL = "http://localhost:3000"
+npm.cmd test
+```
+
+需要身份、文件或数据脚本时，按导出说明提供外部 bindings / target config。生成文件不代表验证通过；查看 `manifest.json` 的 `verified` 标记和验证报告。交给 CI 时复制整个导出目录，保留安装后生成的 lockfile，并准备目标服务、Chromium、系统依赖和外部参数，详见[独立导出](docs/export.md)。
+
+### 直接使用 WebPilot CLI
+
+已有结构化计划时，可在终端无模型执行。从 **WebPilot 源码仓库根目录**运行以下命令；其他位置需使用 WebPilot 的绝对入口。CLI 不要求在待测项目中安装 WebPilot。
+
+先按[计划与绑定文件示例](docs/interfaces.md)准备 `plan.json` 和需要的 bindings；也可让 Codex 将已经确认的验收计划写成这些文件。下面统一使用 `.webpilot/data` 存储，`RUN_ID`、用例 ID/版本、URL 和输出目录须替换成实际值：
+
+```sh
+# 执行计划；需要运行参数时追加 --bindings /path/to/bindings.json
+node dist/cli/index.js run --plan plan.json --data-dir .webpilot/data
+
+# 保存其中一条用例，独立重跑通过后晋升为正式回归用例
+node dist/cli/index.js save --plan plan.json --case invalid-password --promote --data-dir .webpilot/data
+
+# 重跑完整运行，或指定已保存的用例版本
+node dist/cli/index.js replay --run RUN_ID --url http://localhost:3001 --data-dir .webpilot/data
+node dist/cli/index.js replay --case invalid-password --version 1 --url http://localhost:3001 --data-dir .webpilot/data
+
+# 读取 JSON 报告、导出到一个新目录
+node dist/cli/index.js report --run RUN_ID --data-dir .webpilot/data
+node dist/cli/index.js export --run RUN_ID --out ./new-test-package --data-dir .webpilot/data
+```
+
+以上 `node` 命令也可在 PowerShell 执行。用到 bindings 的 run / save / replay / export 命令都要传入相应参数。`--headful` 可用于执行测试时显示浏览器窗口。
+
+CLI 与桌面插件必须使用同一个数据目录才能按 ID 找到同一份资产。默认存储在 WebPilot 用户缓存，可用 `doctor` 查看实际路径；示例中的 `.webpilot/data` 是显式覆盖目录，读取桌面插件创建的运行时应换成其实际目录。`--data-dir` 或 `WEBPILOT_DATA_DIR` 可指定存储位置，业务用例不要求放进目标项目。
+
+CLI 退出码：`0` 稳定完整通过，`1` 正式断言失败，`2` 受阻、未完整验证或重试后通过，`3` 内部错误或无效调用。CI 应同时保留 JSON 报告以判断具体原因。更多命令与 schema 见[接口说明](docs/interfaces.md)。
 
 ## 支持范围
 
