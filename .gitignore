@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.webpilot/
+test-results/
+playwright-report/
+*.tgz
+.DS_Store
+.idea/
+.next/

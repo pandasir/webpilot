@@ -1,0 +1,158 @@
+{
+  "date": "2026-10-13T08:47:29.549Z",
+  "platform": "darwin",
+  "node": "26.7.0",
+  "versions": {
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "vite": "7.3.7",
+    "vue": "3.5.44"
+  },
+  "records": [
+    {
+      "name": "React/Vite",
+      "status": "passed",
+      "durationMs": 3342,
+      "runId": "run-b0f4d808-fa7e-4dde-89a0-5642e571d25e",
+      "promotionRun": "run-5448f006-aea9-45db-8917-38cb1e15905e",
+      "replayRun": "run-2cace282-8357-4d5e-9cb8-0676772baed8",
+      "exportVerified": true
+    },
+    {
+      "name": "Vue/Vite",
+      "status": "passed",
+      "durationMs": 3025,
+      "runId": "run-58f5433e-3c81-4024-8ead-8cff329a65b7",
+      "promotionRun": "run-61f0762b-b228-4b96-a070-2631ed99f00f",
+      "replayRun": "run-ad83bea9-a0f1-478f-a330-f3be37231faf",
+      "exportVerified": true
+    },
+    {
+      "name": "Next.js",
+      "status": "passed",
+      "durationMs": 7686,
+      "runId": "run-f8fe522e-f52e-4c2d-a50f-22876704026e",
+      "promotionRun": "run-5d96d051-e2c1-4b16-8fad-8ce9af8b79be",
+      "replayRun": "run-1a351662-220b-48e1-8e96-59aa0591d853",
+      "exportVerified": true
+    },
+    {
+      "name": "Static HTML",
+      "status": "passed",
+      "durationMs": 2916,
+      "runId": "run-87f7b707-a4da-47d3-bce7-378716447768",
+      "promotionRun": "run-f5504779-395e-46e5-9012-dbd00dc25cb6",
+      "replayRun": "run-c638077e-8bea-46ea-9328-6b7c3fbc8969",
+      "exportVerified": true,
+      "lifecycle": {
+        "prepares": 5,
+        "cleanups": 5
+      },
+      "repetitions": [
+        {
+          "runId": "run-0dfa1566-81fb-4821-aa09-6c2d5a2fb6dd",
+          "outcome": "passed",
+          "attempts": 1
+        },
+        {
+          "runId": "run-604cbebe-02c1-4304-b259-adf46f0f5da9",
+          "outcome": "passed",
+          "attempts": 1
+        },
+        {
+          "runId": "run-a03b4a94-5feb-498b-bbdc-c85d7bfe93c5",
+          "outcome": "passed",
+          "attempts": 1
+        },
+        {
+          "runId": "run-8ffcc3ea-6454-40d1-be77-2d4047717505",
+          "outcome": "passed",
+          "attempts": 1
+        },
+        {
+          "runId": "run-b3d7476e-70da-4dcb-ab5a-eeff23093d75",
+          "outcome": "passed",
+          "attempts": 1
+        }
+      ]
+    },
+    {
+      "name": "Monorepo",
+      "status": "passed",
+      "durationMs": 3166,
+      "runId": "run-8d23f690-e310-4c63-b4f6-b9e61dfa7b70",
+      "promotionRun": "run-7b1d6ac9-e257-4712-93d1-606aa0116f72",
+      "replayRun": "run-6ea71cd1-27d2-4c50-8011-844a316cea8d",
+      "exportVerified": true
+    }
+  ],
+  "defects": [
+    {
+      "name": "button no response",
+      "outcome": "failed",
+      "durationMs": 1082,
+      "runId": "run-4b9b81a6-80cc-4fb1-b816-9f1acd6f0423",
+      "networkEvidence": false
+    },
+    {
+      "name": "missing message",
+      "outcome": "failed",
+      "durationMs": 1116,
+      "runId": "run-e510ce18-2424-44ba-b221-3f35d3cae0ff",
+      "networkEvidence": false
+    },
+    {
+      "name": "request failure",
+      "outcome": "failed",
+      "durationMs": 980,
+      "runId": "run-8d7ac023-b568-4a8d-b180-8b201d68aafc",
+      "networkEvidence": true
+    },
+    {
+      "name": "ambiguous locator",
+      "outcome": "inconclusive",
+      "durationMs": 205,
+      "runId": "run-909938ac-eb51-4b9f-97dd-0a6926559bb7",
+      "networkEvidence": false
+    },
+    {
+      "name": "delayed loading",
+      "outcome": "passed",
+      "durationMs": 506,
+      "runId": "run-1e2de8c8-c6a7-4052-b245-c1d095c2a0bf",
+      "networkEvidence": false
+    },
+    {
+      "name": "expired login",
+      "outcome": "blocked",
+      "durationMs": 858,
+      "runId": "run-d5771ca3-1062-40b7-8027-8e72f4e653f2",
+      "networkEvidence": false
+    },
+    {
+      "name": "preparation failure",
+      "outcome": "blocked",
+      "durationMs": 34,
+      "runId": "run-a2bf90c9-70a7-4cc5-bb79-701fc8014b86",
+      "networkEvidence": false
+    }
+  ],
+  "targetHashesUnchanged": true,
+  "hashes": {
+    "apps/next/AGENTS.md": "063098f6cb31bb44c6f8fbea25b3876de7ee1e5f7d00a50dbab506f6415eb7f0",
+    "apps/next/app/layout.js": "92988b068ae0bdde46303f8d374c8443120d4be7cb28de4c6f83781c67eee493",
+    "apps/next/app/page.js": "349698c487d01fbe9a99bac7bd6271ba160bbda5c432967fec70bea13165b144",
+    "apps/next/package.json": "c02a92bc0e8f34588f1a6f505d2c1bea19aa1a7c844155dbd57e627ff0eba19f",
+    "apps/react/index.html": "1f715f8abee7154580b09e97178e710e186d259d869a3e56945b4fc6d8fa56bf",
+    "apps/react/main.js": "404f96079544af19fd6acce9778d4bb32c717e2fd67c51e41d2ee75103dfb0d8",
+    "apps/react/package.json": "4e1806000411b808c5eebafd6016f323523a1892681c54b74c6a418d44a6c856",
+    "apps/vue/index.html": "34d5eedab8954f704eba322e1a59f3c8666ab80e7b997341071c39e75465fcdd",
+    "apps/vue/main.js": "066701e82a6330ff5cab420b5180e19c801fc0b6ec15d65c9b867a280df0782e",
+    "apps/vue/package.json": "31ce134aa4377d9e269daa35f16dd33a54a8bfd86c56f626abb1c960623e467a",
+    "package-lock.json": "28957f38115b3a4d68eb3fe75d4c8dfc2818fc697723eaf164d1e2165aa9ced2",
+    "package.json": "0901e9d0112a4d2d33b29e61991c946347b26b15f2b216bb406c54606e17db9b",
+    "static/index.html": "3535d70caaff4a079bde679ea256f586d429aa9bd89f23a8fcec22fd742a5858"
+  },
+  "dataDir": "/var/folders/_7/8814nhkj5bn9z_v7tyhp9cqc0000gn/T/webpilot-matrix-swEnFk"
+}

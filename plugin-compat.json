@@ -1,0 +1,14 @@
+{
+  "name": "webpilot",
+  "version": "0.1.0",
+  "description": "Framework-independent Web acceptance and regression",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "WebPilot",
+    "shortDescription": "Browser acceptance and repeatable regression",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["Verify my frontend changes and save a regression case"]
+  }
+}

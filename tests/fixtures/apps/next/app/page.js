@@ -1,0 +1,3 @@
+'use client';
+import {useState} from 'react';
+export default function Page(){const [message,setMessage]=useState(''),[query,setQuery]=useState('');return <main><h1>Framework fixture</h1><form onSubmit={e=>{e.preventDefault();setMessage('Invalid password');}}><label>Email<input name="email" type="email"/></label><label>Password<input name="password" type="password"/></label><button>Log in</button><p role="alert">{message}</p></form><label>Search<input value={query} onChange={e=>setQuery(e.target.value)}/></label><ul>{['Apple','Orange'].filter(x=>x.toLowerCase().includes(query.toLowerCase())).map(x=><li key={x}>{x}</li>)}</ul></main>;}

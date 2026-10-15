@@ -1,0 +1,32 @@
+{
+  "name": "webpilot",
+  "version": "0.1.0",
+  "description": "Framework-independent browser acceptance and model-free regression for Codex",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "webpilot": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
+    "doctor": "node dist/cli/index.js doctor",
+    "mcp": "node dist/mcp/index.js",
+    "test:compatibility": "npm run build && node scripts/compatibility-check.mjs",
+    "package:plugin": "npm run build && node scripts/package-plugin.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "playwright": "1.60.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.60.0",
+    "@types/node": "22.19.1",
+    "typescript": "5.9.3"
+  }
+}

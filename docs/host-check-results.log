@@ -1,0 +1,196 @@
+{
+  "check": "fresh-codex-host-plugin-read",
+  "result": {
+    "plugin": {
+      "marketplaceName": "webpilot-local",
+      "marketplacePath": "/Users/edy/www/webpilot/.webpilot/marketplace/.agents/plugins/marketplace.json",
+      "summary": {
+        "id": "webpilot@webpilot-local",
+        "remotePluginId": null,
+        "version": null,
+        "localVersion": "0.1.0",
+        "name": "webpilot",
+        "shareContext": null,
+        "source": {
+          "type": "local",
+          "path": "/Users/edy/www/webpilot/.webpilot/marketplace/plugins/webpilot"
+        },
+        "installed": true,
+        "installedAt": null,
+        "enabled": true,
+        "installPolicy": "AVAILABLE",
+        "installPolicySource": null,
+        "mustShowInstallationInterstitial": null,
+        "authPolicy": "ON_INSTALL",
+        "availability": "AVAILABLE",
+        "disabledReason": null,
+        "eligiblePlanTypes": null,
+        "interface": {
+          "displayName": "WebPilot",
+          "shortDescription": "Browser acceptance and repeatable regression",
+          "longDescription": null,
+          "developerName": null,
+          "category": "Developer Tools",
+          "capabilities": [
+            "Read",
+            "Write"
+          ],
+          "websiteUrl": null,
+          "privacyPolicyUrl": null,
+          "termsOfServiceUrl": null,
+          "defaultPrompt": [
+            "Verify my frontend changes and save a regression case"
+          ],
+          "brandColor": null,
+          "composerIcon": null,
+          "composerIconUrl": null,
+          "logo": null,
+          "logoDark": null,
+          "logoUrl": null,
+          "logoUrlDark": null,
+          "screenshots": [],
+          "screenshotUrls": []
+        },
+        "keywords": []
+      },
+      "shareUrl": null,
+      "description": "Verify any accessible Web frontend and save model-free browser regressions",
+      "skills": [
+        {
+          "name": "webpilot:diagnose",
+          "description": "Diagnose a WebPilot browser acceptance or regression failure from its saved report and evidence.",
+          "shortDescription": null,
+          "interface": null,
+          "path": "/Users/edy/www/webpilot/.webpilot/marketplace/plugins/webpilot/skills/diagnose/SKILL.md",
+          "enabled": true
+        },
+        {
+          "name": "webpilot:export",
+          "description": "Export selected WebPilot regression assets as an independent Playwright test package for a project or CI.",
+          "shortDescription": null,
+          "interface": null,
+          "path": "/Users/edy/www/webpilot/.webpilot/marketplace/plugins/webpilot/skills/export/SKILL.md",
+          "enabled": true
+        },
+        {
+          "name": "webpilot:replay",
+          "description": "Rerun saved WebPilot browser regression cases after frontend changes without modifying their expected behavior.",
+          "shortDescription": null,
+          "interface": null,
+          "path": "/Users/edy/www/webpilot/.webpilot/marketplace/plugins/webpilot/skills/replay/SKILL.md",
+          "enabled": true
+        },
+        {
+          "name": "webpilot:verify",
+          "description": "Verify a Web frontend feature in a real browser using WebPilot and optionally save a repeatable regression case. Use for local development acceptance or a supplied Web URL.",
+          "shortDescription": null,
+          "interface": null,
+          "path": "/Users/edy/www/webpilot/.webpilot/marketplace/plugins/webpilot/skills/verify/SKILL.md",
+          "enabled": true
+        }
+      ],
+      "onboardingSkill": null,
+      "hooks": [],
+      "apps": [],
+      "appTemplates": [],
+      "mcpServers": [
+        "webpilot"
+      ],
+      "scheduledTasks": null
+    }
+  }
+}
+{
+  "check": "fresh-host-installed-skills",
+  "skills": [
+    {
+      "name": "webpilot:diagnose",
+      "path": "/Users/edy/.codex/plugins/cache/webpilot-local/webpilot/0.1.0/skills/diagnose/SKILL.md",
+      "enabled": true
+    },
+    {
+      "name": "webpilot:export",
+      "path": "/Users/edy/.codex/plugins/cache/webpilot-local/webpilot/0.1.0/skills/export/SKILL.md",
+      "enabled": true
+    },
+    {
+      "name": "webpilot:replay",
+      "path": "/Users/edy/.codex/plugins/cache/webpilot-local/webpilot/0.1.0/skills/replay/SKILL.md",
+      "enabled": true
+    },
+    {
+      "name": "webpilot:verify",
+      "path": "/Users/edy/.codex/plugins/cache/webpilot-local/webpilot/0.1.0/skills/verify/SKILL.md",
+      "enabled": true
+    }
+  ]
+}
+{
+  "check": "host-installed-mcp-inventory",
+  "servers": [
+    {
+      "name": "webpilot",
+      "tools": [
+        "case_save",
+        "session_open",
+        "session_act",
+        "session_close",
+        "suite_run",
+        "export_verify",
+        "run_prepare",
+        "session_check",
+        "context_collect",
+        "report_read",
+        "runtime_doctor",
+        "project_inspect",
+        "session_observe",
+        "case_export",
+        "runtime_info"
+      ],
+      "toolsError": null
+    }
+  ]
+}
+{
+  "check": "packaged-stdio-handshake",
+  "tools": [
+    "runtime_info",
+    "runtime_doctor",
+    "project_inspect",
+    "context_collect",
+    "run_prepare",
+    "session_open",
+    "session_observe",
+    "session_act",
+    "session_check",
+    "session_close",
+    "suite_run",
+    "report_read",
+    "case_save",
+    "case_export",
+    "export_verify"
+  ],
+  "response": {
+    "content": [
+      {
+        "type": "text",
+        "text": "{\"apiVersion\":1,\"data\":{\"apiVersion\":1,\"name\":\"webpilot\",\"version\":\"0.1.0\"}}"
+      }
+    ],
+    "structuredContent": {
+      "apiVersion": 1,
+      "data": {
+        "apiVersion": 1,
+        "name": "webpilot",
+        "version": "0.1.0"
+      }
+    }
+  }
+}
+{
+  "check": "packaged-workflow",
+  "acceptance": "passed",
+  "caseState": "regression-ready",
+  "diagnosis": "failed",
+  "exportVerified": true
+}
