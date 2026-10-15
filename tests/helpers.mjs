@@ -32,7 +32,7 @@ export async function fixture(){
         document.querySelector('#search').oninput=event=>{document.querySelectorAll('li').forEach(li=>li.hidden=!li.textContent.toLowerCase().includes(event.target.value.toLowerCase()));};
         document.querySelector('#upload').onchange=event=>document.querySelector('#file-result').textContent='Uploaded '+event.target.files[0].name;
         document.querySelector('#network').onclick=async()=>{await fetch('/api/fail');console.error('Bearer test-secret-123');document.querySelector('#network-result').textContent='Request failed';};
-        setTimeout(()=>document.querySelector('#delay').textContent='Ready',250);
+        setTimeout(()=>document.querySelector('#delay').textContent='Ready',${Math.min(20000,Math.max(0,Number(url.searchParams.get('delay')??250)))});
       </script></body></html>`);
   });
   await new Promise((ok,fail)=>{server.once('error',fail);server.listen(0,'127.0.0.1',ok);});

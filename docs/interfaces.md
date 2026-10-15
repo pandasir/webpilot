@@ -6,10 +6,11 @@ MCP 使用本地 stdio；成功返回 `{apiVersion:1,data:...}`，失败返回 `
 
 | 工具 | 输入 | 结果 |
 |---|---|---|
+| dashboard_open | `{open?:boolean,force?:boolean}` | 复用本机共享测试中心并首次打开；跨聊天去重，`shouldOpen:false` 时不再开页；显式要求重开可用 `force:true`。返回带短期访问凭证的 `dashboardUrl`、`opened`、`shouldOpen` |
 | runtime_info / runtime_doctor | `{}` | 版本 / Node、浏览器、存储就绪情况 |
 | project_inspect / run_prepare | `{target}` | 有效目标、配置来源、候选及缺口；不执行启动命令 |
 | context_collect | `{projectPath?,requirements?:string[],diffRef?}` | 需求、文档和 Git 上下文；代码影响需另行核实 |
-| session_open | `{target,bindings?:{},role?,headful?:false}` | `sessionId,runId,viewport`；启动必要服务并创建独立 context |
+| session_open | `{target,title?,bindings?:{},role?,headful?:false}` | `sessionId,runId,viewport`；启动必要服务并创建独立 context |
 | session_observe | `{sessionId}` | 脱敏 URL、标题、快照、近期错误 |
 | session_act / session_check | `{sessionId,step}` | 步骤结果与证据；动作 / 断言必须调用对应工具 |
 | session_close | `{sessionId}` | 关闭状态、清理错误、已定稿录像 `recordings` 和本地播放器 `playbackPath` |
@@ -20,6 +21,12 @@ MCP 使用本地 stdio；成功返回 `{apiVersion:1,data:...}`，失败返回 `
 | export_verify | `{directory,url,bindingsFile?,targetConfig?}` | 独立执行结果与更新后的 verified 标记 |
 
 会话失效返回 `SESSION_EXPIRED`；同一会话并发操作返回 `SESSION_BUSY`。每个操作使用唯一步骤 id。动作、断言和重试共享预算；MCP 调用取消会释放会话，suite 保留已执行步骤并尝试 cleanup。宿主在调用前拒绝工具时，插件尚未获得执行机会：Codex 必须报告宿主拒绝，不能编造运行记录。
+
+`session_open.title` 是本次验证目标，例如 `{"title":"验证 MP4 下载流程","target":{"url":"https://example.com/download"}}`。名称去除首尾空白后限 1–120 字符，拒绝控制字符，保存时沿用脱敏；不能提前声明测试已通过。旧调用不传 title 仍可执行，默认采用“项目名 · 浏览器探索”，其次“网站 host · 浏览器探索”，信息未知时使用“浏览器探索会话”。自动标题不包含 URL 路径、查询、片段或完整本机路径。套件继续使用 plan.scope。
+
+执行前调用 `dashboard_open`，避免等待 `suite_run` 完成才取得看板地址。运行返回可带外层可选 `metadata.dashboardUrl/runUrl`，`data` 中的原报告结构不变。多聊天及 CLI 汇总到同一页面；`dashboard open/status/stop/import`、`--no-open`、`--no-dashboard` 及协议详见 [本地测试中心](dashboard.md)。
+
+测试结束后的最终回复必须附上可点击的“本次测试详情”链接，优先使用本次执行返回的 `metadata.runUrl`（回归重跑使用新运行链接）。缺少该字段时，可用已返回的测试中心地址及真实运行 ID，基于测试中心 origin 构造 `/runs/<runId>`。执行前的首页链接、运行 ID、报告文件和录像路径不能替代最终回复中的本次测试详情链接。通过、失败、阻塞、未完整验证以及报告生成失败时均适用；用户显式禁用测试中心或无法取得链接时，应说明原因，不编造地址或另开测试。
 
 ## 最小计划
 
@@ -96,3 +103,20 @@ node dist/cli/index.js prune --days 7
 流程录像默认开启，`target.evidence.video:false` 可关闭。`replay` 命令重新执行测试；观看上一次流程录像无需重新执行，直接用浏览器打开结果中的 `playbackPath`（本地 `recordings.html`）。录像在浏览器上下文关闭后定稿，按尝试及页面保存为 WebM，并按 `retentionDays` 清理。原始视频未经脱敏，仅本地保存，MCP 返回元数据和路径。
 
 退出码：`0` 完整稳定通过；`1` 正式断言失败；`2` 阻塞、未完整验证或重试后通过；`3` 内部错误或无效调用。退出码 2 的具体原因以报告为准。SIGINT/SIGTERM 取消后保留已完成结果并执行有界清理。
+
+## 运行记录管理
+
+测试中心的认证网页接口支持以下操作（需要有效本机会话及同源 Origin，写请求使用 JSON）：
+
+| 接口 | 参数与行为 |
+|---|---|
+| `GET /api/runs?scope=current` | 默认当前记录；`scope=archived` 查看归档。状态、搜索、分页作用于所选范围，顶部统计使用范围全量 |
+| `POST /api/runs/:id/archive` | `{}`，归档并永久保存 |
+| `POST /api/runs/:id/restore` | `{}`，恢复到当前记录且保持永久保存 |
+| `POST /api/runs/:id/title` | `{"title":"验证下载流程"}`，保存显示名称；独立返回 `{id,status:"renamed",title}` |
+| `DELETE /api/runs/:id` | `{"confirmPermanent":true}`，弹窗确认后的不可逆删除 |
+| `POST /api/runs/manage` | `{"action":"archive或restore或delete","ids":["run-id"]}`，最多 20 个 ID，删除还需 `confirmPermanent:true` |
+
+归档/删除管理写接口返回 `{results:[{id,status,error?}]}`。成功状态为 `archived`、`restored`、`deleted`；部分失败返回逐项 `error`，删除尚未完成返回 `cleanup_pending`，不能按 HTTP 200 推断全成功。重复删除返回已删除结果；缺少永久删除确认字段不会执行删除。活动、尚未清理完毕或执行器状态不明的运行拒绝归档/恢复/删除，但允许通过独立 title 接口改名。改名使用同样的认证、来源与运行归属检查，不接受任意文件路径。详情 SSE 的 `deleted` 事件独立于执行序号，包含 `pending` 或 `deleted` 状态。
+
+归档后永久保存所有已有运行文件，恢复/撤销也不重启过期计时，自动清理与显式 `prune --days` 都跳过永久保存记录。管理文件损坏时保守保留并给出诊断。旧版清理器不认识此规则，带归档数据的存储根不能交给旧版执行器或 prune；回滚时需保留永久保存实现或暂停旧版清理。

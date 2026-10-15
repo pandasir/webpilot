@@ -60,7 +60,7 @@ export const TargetSchema = z.object({
   roles: z.record(Id, z.object({ required: z.boolean().default(true), storageStateRef: Id.optional(), login: z.array(StepSchema).default([]), verify: z.array(StepSchema).default([]) }).strict()).default({}),
   data: z.object({ prepare: CommandSchema.optional(), cleanup: CommandSchema.optional() }).strict().default({}),
   budget: BudgetSchema,
-  evidence: z.object({ masks: z.array(z.string().min(1)).default([]), secrets: z.array(RefSchema).default([]), rawTrace: z.boolean().default(false), video: z.boolean().default(true), retentionDays: z.number().int().positive().default(7) }).strict().default({})
+  evidence: z.object({ masks: z.array(z.string().min(1)).default([]), secrets: z.array(RefSchema).default([]), rawTrace: z.boolean().default(false), video: z.boolean().default(true), live: z.boolean().default(true), retentionDays: z.number().int().positive().default(7) }).strict().default({})
 }).strict();
 export const CaseSchema = z.object({
   schemaVersion: z.literal(1), id: Id, version: z.number().int().positive(), title: z.string().min(1),

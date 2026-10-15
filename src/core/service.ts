@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import {chmod,writeFile} from 'node:fs/promises';
 import {z} from 'zod';
-import {BindingsSchema,HttpUrlSchema,StepSchema,isAssertion,type Plan,type StepResult} from './schema.js';
+import {BindingsSchema,HttpUrlSchema,StepSchema,TargetSchema,isAssertion,type Plan,type StepResult} from './schema.js';
 import {Budget} from './budget.js';
 import {capture,runPlan,saveCase,type RunOptions} from './runner.js';
 import {PilotError,errorInfo} from './errors.js';
@@ -13,36 +13,51 @@ import {Store} from '../artifacts/store.js';
 import {Redactor} from '../artifacts/redaction.js';
 import {exportPlan,verifyExport} from '../artifacts/export.js';
 import {recordingPlayer} from '../artifacts/video.js';
+import {Progress} from './progress.js';
+import {openDashboard} from '../dashboard/lifecycle.js';
+import {TitleSchema,explorationTitle} from './titles.js';
 
-interface LiveSession {session:BrowserSession;service:Awaited<ReturnType<typeof prepareService>>;runId:string;controller:AbortController;timer:ReturnType<typeof setTimeout>;busy:boolean;steps:StepResult[]}
+interface LiveSession {session:BrowserSession;service:Awaited<ReturnType<typeof prepareService>>;runId:string;controller:AbortController;timer:ReturnType<typeof setTimeout>;busy:boolean;steps:StepResult[];progress:Progress;closed?:boolean;idle?:Promise<void>;idleResolve?:()=>void}
 export class WebPilotService {
   readonly store:Store;
   private sessions=new Map<string,LiveSession>();
+  private closing=new Map<string,Promise<any>>();
   constructor(readonly dataDir?:string){this.store=new Store(dataDir);}
   async prepare(input:unknown){const target=await inspectProject(input);return {runtime:await doctor({dataDir:this.dataDir}),...target};}
-  async open(input:unknown,options:RunOptions & {role?:string}={}){
-    const inspection=await inspectProject(input);
+  async open(input:unknown,options:RunOptions & {role?:string;title?:string}={}){
+    const initial=TargetSchema.parse(input);
+    const taskTitle=options.title===undefined?undefined:TitleSchema.parse(options.title);
+    const bindings=BindingsSchema.parse(options.bindings??{});const redactor=new Redactor(bindings);
     const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),inspection.target.budget.totalMs);
+    let timer=setTimeout(()=>controller.abort(),initial.budget.totalMs);
     const signal=options.signal?AbortSignal.any([controller.signal,options.signal]):controller.signal;
     let service:Awaited<ReturnType<typeof prepareService>>|undefined;let session:BrowserSession|undefined;
     const runId=`run-${randomUUID()}`;
+    await this.store.prune();await this.store.beginRun(runId,initial.evidence.retentionDays,initial.evidence.rawTrace,initial.evidence.video);
+    const progress=await Progress.create(this.store.runDir(runId),this.store.root,{id:runId,title:taskTitle??explorationTitle(initial),titleSource:taskTitle?'task':'target',mode:'exploration',target:initial.url??'准备目标中',project:initial.projectPath,startedAt:new Date().toISOString(),cases:[],live:initial.evidence.live},redactor,options);
     try{
+      await progress.phase('preparing','检查项目与准备浏览器');
+      const inspection=await inspectProject(input);await progress.target(inspection.target);
+      await this.store.configureRun(runId,inspection.target.evidence);
+      clearTimeout(timer);timer=setTimeout(()=>controller.abort(),inspection.target.budget.totalMs);
       service=await prepareService(inspection,signal);
-      await this.store.prune();await this.store.beginRun(runId,service.target.evidence.retentionDays,service.target.evidence.rawTrace,service.target.evidence.video);
-      session=new BrowserSession(service.target,new Budget(service.target.budget,signal),BindingsSchema.parse(options.bindings ?? {}));
+      await progress.target(service.target);
+      session=new BrowserSession(service.target,new Budget(service.target.budget,signal),bindings,redactor);
+      await progress.attach(session,'exploration',1);
       await session.open({role:options.role,headful:options.headful,recordingDir:join(this.store.runDir(runId),'videos','exploration','1')});
-      this.sessions.set(session.id,{session,service,runId,controller,timer,busy:false,steps:[]});
+      await progress.emit('attempt.started',{}, {caseId:'exploration',attempt:1});
+      await progress.phase('running','等待探索步骤');
+      this.sessions.set(session.id,{session,service,runId,controller,timer,busy:false,steps:[],progress});
       const id=session.id;signal.addEventListener('abort',()=>{void this.close(id).catch(()=>{});},{once:true});
       return {sessionId:id,runId,viewport:service.target.viewport};
     }catch(error){clearTimeout(timer);await session?.close().catch(()=>{});
-      if(session)await this.persist({session,runId,steps:[]});
-      await service?.close();throw error;}
+      if(session)await this.persist({session,runId,steps:[],progress});
+      await service?.close();await progress.finish({reason:redactor.text(errorInfo(error).message)});throw error;}
   }
-  private async persist(live:Pick<LiveSession,'session'|'runId'|'steps'>){
+  private async persist(live:Pick<LiveSession,'session'|'runId'|'steps'|'closed'|'progress'>){
     const {session,runId,steps}=live;
-    await writeFile(join(this.store.runDir(runId),'session.json'),JSON.stringify(session.redactor.object({schemaVersion:1,sessionId:session.id,runId,steps,recordings:session.recordings}),null,2)+'\n',{mode:0o600});
-    if(session.target.evidence.video)await writeFile(join(this.store.runDir(runId),'recordings.html'),recordingPlayer(`WebPilot 流程录像：${runId}`,this.store.runDir(runId),[{title:'浏览器探索会话',recordings:session.redactor.object(session.recordings)}]),{mode:0o600});
+    await writeFile(join(this.store.runDir(runId),'session.json'),JSON.stringify(session.redactor.object({schemaVersion:1,sessionId:session.id,runId,title:live.progress.meta.title,titleSource:live.progress.meta.titleSource,steps,recordings:session.recordings,closed:live.closed??false,...(live.closed?{finishedAt:new Date().toISOString()}: {})}),null,2)+'\n',{mode:0o600});
+    if(session.target.evidence.video)await writeFile(join(this.store.runDir(runId),'recordings.html'),recordingPlayer(`WebPilot 流程录像：${runId}`,this.store.runDir(runId),[{title:live.progress.meta.title,recordings:session.redactor.object(session.recordings)}]),{mode:0o600});
   }
   private live(id:string){const live=this.sessions.get(id);if(!live)throw new PilotError('SESSION_EXPIRED','Session unavailable or expired');return live;}
   async observe(id:string){const live=this.live(id);return live.session.observe();}
@@ -53,23 +68,35 @@ export class WebPilotService {
     if(live.steps.some(s=>s.id===step.id))throw new PilotError('STEP_ID_EXISTS','Use a unique step id within a session');
     const start=Date.now();const result:StepResult={id:step.id,op:step.op,outcome:'passed',timestamp:new Date().toISOString(),durationMs:0,candidate:isAssertion(step)&&step.candidate,evidence:[]};
     const abort=()=>live.controller.abort();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
-    live.busy=true;try{
+    live.busy=true;live.idle=new Promise(resolve=>{live.idleResolve=resolve;});try{
+      await live.progress.emit('step.started',{op:step.op},{caseId:'exploration',attempt:1,stepId:step.id});
       try{result.actual=(await live.session.perform(step)).actual;}catch(error){const info=errorInfo(error);result.outcome=result.candidate && info.outcome==='failed'?'inconclusive':info.outcome;result.error={code:info.code,message:info.message};}
       if(isAssertion(step) && 'expected' in step)result.expected=step.expected;
       result.durationMs=Date.now()-start;
+      await live.progress.emit('step.finished',result,{caseId:'exploration',attempt:1,stepId:step.id});
+      await live.progress.phase('collecting','采集探索步骤证据');
       await capture(live.session,this.store,live.runId,'exploration',1,result);
+      await live.progress.emit('evidence.available',{step:result},{caseId:'exploration',attempt:1,stepId:step.id});
       const safe=live.session.redactor.object(result);live.steps.push(safe);
       await this.persist(live);
       return safe;
-    }finally{live.busy=false;signal?.removeEventListener('abort',abort);}
+    }finally{live.busy=false;live.idleResolve?.();live.idle=undefined;signal?.removeEventListener('abort',abort);}
   }
-  async close(id:string){
+  close(id:string):Promise<any>{
+    const pending=this.closing.get(id);if(pending)return pending;
+    const task=this.finishClose(id);this.closing.set(id,task);if(this.closing.size>32)this.closing.delete(this.closing.keys().next().value!);return task;
+  }
+  private async finishClose(id:string){
     const live=this.live(id);this.sessions.delete(id);clearTimeout(live.timer);
+    if(live.busy)live.controller.abort();await live.idle;live.closed=true;
+    await live.progress.phase('cleaning','关闭浏览器并定稿录像');await live.progress.detachBrowser();
     const errors:string[]=[];
     try{const trace=live.session.target.evidence.rawTrace?join(this.store.runDir(live.runId),'sensitive-trace.zip'):undefined;await live.session.close(trace);if(trace)await chmod(trace,0o600);}catch(error){errors.push(errorInfo(error).message);}
     await this.persist(live);
     live.controller.abort();
     try{await live.service.close();}catch(error){errors.push(errorInfo(error).message);}
+    await live.progress.emit('recording.available',{recordings:live.session.recordings},{caseId:'exploration',attempt:1});
+    await live.progress.finish({reason:errors.length?live.session.redactor.text(errors.join('; ')):undefined});
     return {sessionId:id,runId:live.runId,closed:true,cleanupErrors:live.session.redactor.object(errors),recordings:live.session.redactor.object(live.session.recordings),...(live.session.target.evidence.video?{playbackPath:join(this.store.runDir(live.runId),'recordings.html')}: {})};
   }
   async closeAll(){for(const id of [...this.sessions.keys()])await this.close(id).catch(()=>{});}
@@ -78,12 +105,13 @@ export class WebPilotService {
 }
 
 export const ToolInputs={
+  dashboard_open:z.object({open:z.boolean().default(true),force:z.boolean().default(false)}).strict(),
   runtime_info:z.object({}).strict(),
   runtime_doctor:z.object({}).strict(),
   project_inspect:z.object({target:z.unknown()}).strict(),
   context_collect:z.object({projectPath:z.string().optional(),requirements:z.array(z.string()).optional(),diffRef:z.string().optional()}).strict(),
   run_prepare:z.object({target:z.unknown()}).strict(),
-  session_open:z.object({target:z.unknown(),bindings:BindingsSchema.default({}),role:z.string().optional(),headful:z.boolean().default(false)}).strict(),
+  session_open:z.object({target:z.unknown(),title:TitleSchema.optional(),bindings:BindingsSchema.default({}),role:z.string().optional(),headful:z.boolean().default(false)}).strict(),
   session_observe:z.object({sessionId:z.string()}).strict(),
   session_act:z.object({sessionId:z.string(),step:StepSchema}).strict(),
   session_check:z.object({sessionId:z.string(),step:StepSchema}).strict(),
@@ -99,12 +127,13 @@ export async function dispatch(service:WebPilotService,name:string,input:unknown
   const schema=ToolInputs[name as keyof typeof ToolInputs];
   const args=schema.parse(input) as Record<string,any>;
   switch(name){
+    case 'dashboard_open':return openDashboard({auto:true,open:args.open,force:args.force});
     case 'runtime_info':return {apiVersion:1,name:'webpilot',version:'0.1.0'};
     case 'runtime_doctor':return doctor({dataDir:service.dataDir});
     case 'project_inspect':return inspectProject(args.target);
     case 'context_collect':return collectContext(args);
     case 'run_prepare':return service.prepare(args.target);
-    case 'session_open':return service.open(args.target,{bindings:args.bindings,role:args.role,headful:args.headful,signal});
+    case 'session_open':return service.open(args.target,{title:args.title,bindings:args.bindings,role:args.role,headful:args.headful,signal});
     case 'session_observe':return service.observe(args.sessionId);
     case 'session_act':return service.step(args.sessionId,args.step,false,signal);
     case 'session_check':return service.step(args.sessionId,args.step,true,signal);

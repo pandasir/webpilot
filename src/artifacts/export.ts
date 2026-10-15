@@ -13,9 +13,13 @@ export async function exportPlan(input:unknown,output:string,bindings:Bindings={
   await mkdir(destination,{recursive:true,mode:0o700});
   const builtRoot=resolve(dirname(fileURLToPath(import.meta.url)),'..');
   for(const dir of ['core','project','browser','artifacts'])await cp(join(builtRoot,dir),join(destination,'runtime',dir),{recursive:true,filter:src=>!src.endsWith('.map') && !src.endsWith('.d.ts')});
+  // Only dependency-free progress/ownership helpers travel with the executor.
+  // Independent packages never start a Dashboard or require its ws/React runtime.
+  await mkdir(join(destination,'runtime','dashboard'),{recursive:true});
+  for(const file of ['protocol.js','files.js','projection.js'])await cp(join(builtRoot,'dashboard',file),join(destination,'runtime','dashboard',file));
   const {url,projectPath,configPath,application,command,staticDir,data,...portableTarget}=plan.target;
   const externalData=!!(data.prepare || data.cleanup);
-  const portablePlan={...plan,target:{...portableTarget,evidence:{...portableTarget.evidence,rawTrace:false}}};
+  const portablePlan={...plan,target:{...portableTarget,evidence:{...portableTarget.evidence,rawTrace:false,live:false}}};
   const references=new Set<string>();
   function refs(item:unknown){if(!item || typeof item!=='object')return;if(Array.isArray(item)){item.forEach(refs);return;}for(const [key,value] of Object.entries(item)){if((key==='ref' || key==='storageStateRef') && typeof value==='string')references.add(value);else refs(value);}}
   refs(portablePlan);
@@ -36,7 +40,7 @@ test(plan.id+': acceptance suite',async({},info)=>{
   if(manifest.requiresPrepare && !overrides.data?.prepare) throw new Error('Blocked: equivalent data preparation is required');
   if(manifest.requiresCleanup && !overrides.data?.cleanup) throw new Error('Blocked: equivalent data cleanup is required');
   const bindings=process.env.WEBPILOT_BINDINGS_FILE?JSON.parse(await readFile(process.env.WEBPILOT_BINDINGS_FILE,'utf8')):{};
-  const run=await runPlan({...plan,target:{...plan.target,...overrides,url:process.env.BASE_URL}},{dataDir:info.outputPath('webpilot-data'),bindings});
+  const run=await runPlan({...plan,target:{...plan.target,...overrides,url:process.env.BASE_URL}},{dataDir:info.outputPath('webpilot-data'),bindings,dashboard:false});
   await info.attach('acceptance-result',{body:JSON.stringify(run,null,2),contentType:'application/json'});
   info.annotations.push({type:'acceptance-status',description:run.outcome+(run.unstable?' (unstable)':'')});
   expect(run.exitCode,JSON.stringify(run.cases)).toBe(0);

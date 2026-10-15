@@ -6,6 +6,8 @@ import { dataRoot } from '../core/runtime.js';
 import { PilotError } from '../core/errors.js';
 import {outcomeLabels,evidenceLabels,operationLabel,diagnosticLabel,reportText,attemptReason} from './reporting.js';
 import {recordingPlayer} from './video.js';
+import {ownerAlive} from '../dashboard/files.js';
+import {withRunLock,ownedRun,managementState,deletionState} from './management.js';
 
 export function safeId(id:string){if(!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(id))throw new PilotError('INVALID_ID','Invalid asset or run id');return id;}
 export class Store {
@@ -13,6 +15,7 @@ export class Store {
   constructor(root?:string){this.root=dataRoot(root);}
   runDir(id:string){return join(this.root,'runs',safeId(id));}
   async beginRun(id:string,retentionDays=7,sensitiveRawTrace=false,sensitiveVideo=false){const dir=this.runDir(id);await mkdir(dir,{recursive:true,mode:0o700});await writeFile(join(dir,'.owner.json'),JSON.stringify({owner:'webpilot',id,createdAt:Date.now(),retentionDays,sensitiveRawTrace,sensitiveVideo}),{flag:'wx',mode:0o600});return dir;}
+  async configureRun(id:string,evidence:{retentionDays:number;rawTrace:boolean;video:boolean}){const path=join(this.runDir(id),'.owner.json');const owner=JSON.parse(await readFile(path,'utf8'));await writeFile(path,JSON.stringify({...owner,retentionDays:evidence.retentionDays,sensitiveRawTrace:evidence.rawTrace,sensitiveVideo:evidence.video}),{mode:0o600});}
   async evidence(runId:string,type:Evidence['type'],content:Buffer|string){const file=`${type}-${randomUUID()}${type==='screenshot'?'.png':'.json'}`;const path=join(this.runDir(runId),file);await writeFile(path,content,{flag:'wx',mode:0o600});return path;}
   async saveRun(run:Run,markdown:string){RunSchema.parse(run);const dir=this.runDir(run.id);await writeFile(join(dir,'report.json'),JSON.stringify(run,null,2)+'\n',{flag:'wx',mode:0o600});await writeFile(join(dir,'report.md'),markdown,{flag:'wx',mode:0o600});
     if(run.playbackPath)await writeFile(join(dir,'recordings.html'),recordingPlayer(`WebPilot 流程录像：${run.id}`,dir,run.cases.flatMap(c=>c.attempts.map(a=>({title:`${c.title} · 第 ${a.number} 次尝试 · ${outcomeLabels[a.outcome]}`,recordings:a.recordings ?? []})))),{flag:'wx',mode:0o600});
@@ -25,12 +28,21 @@ export class Store {
     let removed=0;const root=join(this.root,'runs');let entries;try{entries=await readdir(root,{withFileTypes:true});}catch{return removed;}
     for(const entry of entries){
       if(!entry.isDirectory() || entry.isSymbolicLink())continue;
-      const dir=join(root,entry.name);try{
-        const marker=join(dir,'.owner.json');if((await lstat(marker)).isSymbolicLink())continue;
+      const dir=join(root,entry.name);try{await withRunLock(this.root,entry.name,async()=>{
+        await ownedRun(this.root,entry.name);
+        if(await deletionState(this.root,entry.name)||(await managementState(dir)).keepForever)return;
+        const marker=join(dir,'.owner.json');if((await lstat(marker)).isSymbolicLink())return;
         const owner=JSON.parse(await readFile(marker,'utf8'));
+        try{
+          const live=JSON.parse(await readFile(join(dir,'live.json'),'utf8'));
+          let finished=false;try{await lstat(join(dir,'report.json'));finished=true;}catch{}
+          try{finished ||= JSON.parse(await readFile(join(dir,'session.json'),'utf8')).closed===true;}catch{}
+          try{const lines=(await readFile(join(dir,'events.jsonl'),'utf8')).trimEnd().split('\n');const last=JSON.parse(lines.at(-1)!);finished ||= last.runId===entry.name&&last.type==='run.finished';}catch{}
+          if(!finished&&live.id===entry.name&&live.owner&&await ownerAlive(live.owner)!==false)return;
+        }catch{}
         const retention=days ?? (Number.isFinite(owner.retentionDays) && owner.retentionDays>=1?owner.retentionDays:7);
         if(owner.owner==='webpilot' && owner.id===entry.name && Number.isFinite(owner.createdAt) && now-owner.createdAt>retention*86400000){await rm(dir,{recursive:true});removed++;}
-      }catch{/* Ignore files not demonstrably owned by WebPilot. */}
+      });}catch{/* Ignore unowned, busy or unreadable management state. */}
     }
     return removed;
   }

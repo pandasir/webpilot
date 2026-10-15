@@ -6,6 +6,8 @@ const root=fileURLToPath(new URL('../',import.meta.url));
 const destination=resolve(process.argv[2] ?? '.webpilot/marketplace');
 const plugin=join(destination,'plugins','webpilot');
 await access(join(root,'dist/mcp/index.js'));
+await access(join(root,'dist/cli/index.js'));
+await access(join(root,'dist/dashboard/public/index.html'));
 await mkdir(plugin,{recursive:true});
 for(const entry of ['plugin.json','mcp.json','package.json','package-lock.json','README.md','dist','node_modules','skills','docs']) {
   await cp(join(root,entry),join(plugin,entry),{recursive:true});

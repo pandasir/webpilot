@@ -11,22 +11,30 @@
     "webpilot": "dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test --test-concurrency=1 tests/*.test.mjs",
+    "build": "tsc -p tsconfig.json && vite build --config dashboard-ui/vite.config.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p dashboard-ui/tsconfig.json",
+    "test": "npm run build && node --import ./tests/dashboard-env.mjs --test --test-concurrency=1 tests/*.test.mjs",
     "doctor": "node dist/cli/index.js doctor",
     "mcp": "node dist/mcp/index.js",
     "test:compatibility": "npm run build && node scripts/compatibility-check.mjs",
+    "benchmark:dashboard": "npm run build && node scripts/dashboard-benchmark.mjs",
     "package:plugin": "npm run build && node scripts/package-plugin.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
     "playwright": "1.60.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "ws": "8.22.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@playwright/test": "1.60.0",
     "@types/node": "22.19.1",
-    "typescript": "5.9.3"
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@types/ws": "8.18.1",
+    "typescript": "5.9.3",
+    "vite": "7.3.7"
   }
 }

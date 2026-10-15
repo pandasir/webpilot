@@ -28,7 +28,7 @@ test('MCP stdio schema, structured errors, suite and CLI replay agree without mo
   const f=await fixture();const client=new Client({name:'test',version:'1'});
   try{
     await client.connect(new StdioClientTransport({command:process.execPath,args:['dist/mcp/index.js'],env:{...process.env,WEBPILOT_DATA_DIR:f.dataDir},stderr:'pipe'}));
-    const inventory=await client.listTools();assert.equal(inventory.tools.length,15);assert.ok(inventory.tools.find(t=>t.name==='session_act').inputSchema.properties.step);
+    const inventory=await client.listTools();assert.equal(inventory.tools.length,16);assert.ok(inventory.tools.find(t=>t.name==='session_act').inputSchema.properties.step);
     const expired=await client.callTool({name:'session_observe',arguments:{sessionId:'absent'}});assert.equal(expired.isError,true);assert.equal(expired.structuredContent.error.code,'SESSION_EXPIRED');
     const p=plan(f.url,loginSteps());
     const mcp=(await client.callTool({name:'suite_run',arguments:{plan:p}})).structuredContent.data;

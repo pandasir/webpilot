@@ -13,7 +13,7 @@ Optional target fields:
 - `roles`: named `{ required, storageStateRef?, login: Step[], verify: Step[] }` profiles. Required roles need formal observable verification, so expired states cannot count as authenticated.
 - `data`: `prepare` and `cleanup` commands. Cleanup runs even after verification fails; cleanup problems keep the run incomplete.
 - `budget`: `{ totalMs, maxSteps, assertionMs, attempts }`; defaults 600000, 100, 10000, 1.
-- `evidence`: `{ masks: string[], secrets: [{ ref }], rawTrace: false, video: true, retentionDays: 7 }`. 流程录像默认保留所有浏览器尝试，含通过、失败与重试；设置 `video:false` 关闭。
+- `evidence`: `{ masks: string[], secrets: [{ ref }], rawTrace: false, video: true, live: true, retentionDays: 7 }`. 流程录像默认保留所有浏览器尝试，含通过、失败与重试；设置 `video:false` 关闭录像、`live:false` 独立关闭看板直播。直播只在观看时采集，为可能未经脱敏的敏感本地画面，详见 [测试中心](dashboard.md)。
 
 Discovery reads package scripts, known lockfiles, README URLs and nested applications without running discovered commands. Multiple candidates need explicit selection. Missing target dependencies are environment blockers; WebPilot does not install them. Existing servers survive verification; only owned processes/static servers are stopped. Data commands have individual timeouts and use their own process groups.
 

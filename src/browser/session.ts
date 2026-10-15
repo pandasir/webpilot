@@ -24,7 +24,14 @@ export class BrowserSession {
   readonly id=`session-${randomUUID()}`;
   browser!:Browser;
   context!:BrowserContext;
-  page!:Page;
+  private currentPage!:Page;
+  private pageListeners=new Set<()=>void>();
+  private pageIds=new WeakMap<Page,string>();
+  private pageSequence=0;
+  get page(){return this.currentPage;}
+  set page(page:Page){this.currentPage=page;for(const listener of this.pageListeners)listener();}
+  onPage(listener:()=>void){this.pageListeners.add(listener);return ()=>{this.pageListeners.delete(listener);};}
+  pageIdentity(){let id=this.pageIds.get(this.page);if(!id){id=`page-${++this.pageSequence}`;this.pageIds.set(this.page,id);}return id;}
   private frame?:FrameLocator;
   private pages=new Map<string,Page>();
   private closed=false;
