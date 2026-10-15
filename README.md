@@ -6,6 +6,18 @@ Codex 根据需求规划和诊断；本地执行器负责真实 Chromium 操作�
 
 ## 快速开始
 
+### 推荐：一句话让 Codex 安装（macOS / Windows）
+
+打开 Codex 桌面版聊天，复制发送下面这句话：
+
+> 帮我把 https://github.com/pandasir/webpilot 的 WebPilot 插件安装到当前 Codex 桌面版，按仓库 README 的手动步骤自动适配 macOS 或 Windows，完成安装和检查，并告诉我重启后的验证方法。
+
+Codex 可代你下载仓库、检查 Node.js 22+ / npm、安装依赖、构建、准备 Chromium、打包本地市场并安装插件；已有本地仓库时可直接使用。仓库和生成的本地市场应保留在固定目录，供后续更新使用。安装能力取决于当前宿主是否支持插件，以及聊天的网络和文件权限；遇到缺少运行环境或需要桌面操作的步骤时，Codex 应说明具体需要你完成的操作。
+
+安装完成后，完全退出并重新打开 Codex 桌面应用，创建一个**新聊天**，检查四个 WebPilot Skill 是否可用。当前安装聊天不会自动加载新工具。
+
+希望手动安装时，按下面的步骤操作。
+
 ### 1. 准备运行环境与插件包
 
 要求 Node.js 22+、npm，以及支持插件的 Codex 桌面版或 CLI。WebPilot 需要本地 Node.js 和 Chromium；桌面版自带的 Codex CLI 不会替代 Node.js。
