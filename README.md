@@ -348,4 +348,4 @@ node scripts/compatibility-check.mjs
 node scripts/host-check.mjs .webpilot/marketplace
 ```
 
-测试需要 loopback 服务和 Chromium 进程权限。五类真实样例及缺陷集结果见 [兼容记录](docs/compatibility.md)；测试中心的专项验证见 [实时看板验收](docs/dashboard-acceptance.md)、[工作台界面验收](docs/workspace-ui-acceptance.md)、[运行管理验收](docs/run-management-acceptance.md) 和 [运行标题验收](docs/run-title-acceptance.md)。完整接口见 [工具/CLI](docs/interfaces.md)，另有 [接入](docs/project.md)、[规划](docs/planning.md)、[报告](docs/reporting.md)、[资产](docs/assets.md) 与 [独立导出](docs/export.md)。
+测试需要 loopback 服务和 Chromium 进程权限。五类真实样例及缺陷集结果见 [兼容记录](docs/compatibility.md)；测试中心的专项验证见 [实时看板验收](docs/dashboard-acceptance.md)、[工作台界面验收](docs/workspace-ui-acceptance.md)、[视觉改版验收](docs/dashboard-visual-refresh.md)、[运行管理验收](docs/run-management-acceptance.md) 和 [运行标题验收](docs/run-title-acceptance.md)。完整接口见 [工具/CLI](docs/interfaces.md)，另有 [接入](docs/project.md)、[规划](docs/planning.md)、[报告](docs/reporting.md)、[资产](docs/assets.md) 与 [独立导出](docs/export.md)。

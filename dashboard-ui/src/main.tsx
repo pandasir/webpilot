@@ -88,6 +88,7 @@ function Overview({path}:{path:string}){
 function LiveView({run}:{run:Run}){
   const [image,setImage]=useState(''),[message,setMessage]=useState('等待实时画面'),[frames,setFrames]=useState(0),[captured,setCaptured]=useState(0),[pageName,setPageName]=useState('');
   const current=useRef('');
+  const still=run.artifacts.filter(a=>a.type==='screenshot').at(-1);
   useEffect(()=>{
     if(!active(run)||!run.meta.live){setMessage(run.meta.live?'直播已结束，可查看下方录像':'本次运行已关闭直播');return;}
     let disposed=false,ws:WebSocket|undefined,retry:ReturnType<typeof setTimeout>|undefined;let epoch=-1,seq=-1;
@@ -100,7 +101,8 @@ function LiveView({run}:{run:Run}){
       };ws.onclose=()=>{if(!disposed){setMessage('画面连接中断，正在重连');retry=setTimeout(connect,1500);}};ws.onerror=()=>ws?.close();
     };connect();return ()=>{disposed=true;if(retry)clearTimeout(retry);ws?.close();if(current.current){URL.revokeObjectURL(current.current);current.current='';}};
   },[run.id,active(run),run.meta.live]);
-  return <div className="live-container" data-frames={frames}><div className="browser-bar"><span className="traffic"><i/><i/><i/></span><span className="browser-address">{run.meta.target}</span><span className="live-indicator">{active(run)?'LIVE':'ENDED'}</span></div><div className="live-stage">{image?<img src={image} alt="浏览器实时画面"/>:<Empty><span>{message}</span></Empty>}</div><div className="live-footer"><span><i className={active(run)?'dot':'dot muted'}/>{message}</span><span>{pageName}{captured?` · 最近画面 ${new Date(captured).toLocaleTimeString('zh-CN')}`:''}</span></div></div>;
+  const ended=!active(run);
+  return <div className="live-container" data-frames={frames}><div className="browser-bar"><span className="traffic"><i/><i/><i/></span><span className="browser-address">{run.meta.target}</span><span className={`live-indicator ${active(run)?'on':''}`}>{active(run)?'LIVE':'ENDED'}</span></div><div className={`live-stage ${ended?'ended':''}`}>{image?<img src={image} alt="浏览器实时画面"/>:ended&&still?<figure className="live-still"><Screenshot src={assetUrl(run,still)} alt={`${run.meta.title} 结束时的页面截图`} loading="lazy"/><figcaption>运行已结束 · 最近一张步骤截图</figcaption></figure>:<Empty><span>{message}</span></Empty>}</div><div className="live-footer"><span><i className={active(run)?'dot live':'dot muted'}/>{message}</span><span>{pageName}{captured?` · 最近画面 ${new Date(captured).toLocaleTimeString('zh-CN')}`:''}</span></div></div>;
 }
 function Recordings({run}:{run:Run}){const videos=run.artifacts.filter(a=>a.type==='video');return <div className="media-list">{videos.map(v=><section className="media-item" key={v.id}><h3>{run.cases.find(c=>c.id===v.caseId)?.title??'浏览器探索'} · 第 {v.attempt??1} 次尝试 · {v.pageName??v.pageId}</h3><video controls preload="metadata" src={assetUrl(run,v)}/></section>)}{run.recordingGaps.map((gap,i)=><p className="notice" key={i}>录像证据缺口：{gap}</p>)}{!videos.length&&!run.recordingGaps.length&&<Empty><p>{active(run)?'录像将在浏览器上下文关闭后定稿。':'没有可用录像，可能未启用或已过期。'}</p></Empty>}</div>;}
 function Detail({id,compact=false}:{id:string;compact?:boolean}){
