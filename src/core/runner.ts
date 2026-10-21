@@ -9,8 +9,12 @@ import {inspectProject,prepareService,runCommand,collectContext} from '../projec
 import {Redactor,assertPortable} from '../artifacts/redaction.js';
 import {Store,markdownReport} from '../artifacts/store.js';
 import {Progress} from './progress.js';
+import {CoverageStore} from '../artifacts/coverage.js';
+import {coverageFromPlan,verifyCoveragePlan,coverageResult,reconciliationMarkdown,type CoverageRef} from './coverage.js';
+import {atomicJson} from '../dashboard/files.js';
+import {summarizeAcceptance} from './acceptance.js';
 
-export interface RunOptions{dataDir?:string;bindings?:Bindings;signal?:AbortSignal;headful?:boolean;dashboard?:boolean;dashboardRoot?:string}
+export interface RunOptions{dataDir?:string;bindings?:Bindings;signal?:AbortSignal;headful?:boolean;dashboard?:boolean;dashboardRoot?:string;coverage?:CoverageRef}
 export function summarize(results:{outcome:Outcome;unstable:boolean}[],cleanupErrors:string[]=[]){
   let outcome:Outcome=results.some(r=>r.outcome==='failed')?'failed':results.some(r=>r.outcome==='blocked')?'blocked':!results.length || results.some(r=>r.outcome==='inconclusive')?'inconclusive':'passed';
   if(cleanupErrors.length && outcome==='passed')outcome='inconclusive';
@@ -31,7 +35,11 @@ export async function capture(session:BrowserSession,store:Store,runId:string,ca
 export async function runPlan(input:unknown,options:RunOptions={}):Promise<Run>{
   const plan=PlanSchema.parse(input);const bindings=BindingsSchema.parse(options.bindings ?? {});const redactor=new Redactor(bindings);const store=new Store(options.dataDir);
   assertPortable(plan,bindings);
+  const coverageStore=new CoverageStore(store.root);await coverageStore.prune();let coverage=options.coverage;
+  if(!coverage){const created=await coverageStore.create(coverageFromPlan(plan),bindings);coverage={id:created.manifest.id,revision:created.manifest.revision};await coverageStore.adopt(coverage,'原有结构化计划，确定性派生覆盖清单');}
+  const adopted=await coverageStore.snapshot(coverage);try{verifyCoveragePlan(adopted,plan);}catch(error){throw new PilotError('COVERAGE_MISMATCH',(error as Error).message);}
   const id=`run-${randomUUID()}`;await store.prune();await store.beginRun(id,plan.target.evidence.retentionDays,plan.target.evidence.rawTrace,plan.target.evidence.video);
+  const snapshot=await coverageStore.saveSnapshot(coverage,store.runDir(id));await writeFile(join(store.runDir(id),'plan.json'),JSON.stringify(plan,null,2)+'\n',{flag:'wx',mode:0o600});await coverageStore.link(coverage,id);
   const startedAt=new Date().toISOString();
   const progress=await Progress.create(store.runDir(id),store.root,{id,title:plan.scope.join('、'),mode:'suite',target:plan.target.url??'准备目标中',project:plan.target.projectPath,startedAt,totalCases:plan.cases.length,cases:plan.cases.map(c=>({id:c.id,title:c.title,version:c.version})),live:plan.target.evidence.live},redactor,options);
   try{
@@ -57,6 +65,8 @@ export async function runPlan(input:unknown,options:RunOptions={}):Promise<Run>{
       const attempt:Attempt={number,outcome:'passed',steps:[]};let session:BrowserSession|undefined;let prepared=false;
       try {
         budget.check();
+        const inventory=snapshot.manifest.draft.items.find(i=>i.id===c.id);
+        if(inventory?.readiness!=='ready')throw new PilotError('CASE_NOT_READY',inventory?.reason??'场景尚未就绪',inventory?.readiness==='needs-clarification'?'inconclusive':'blocked');
         if(setupError)throw new PilotError(setupError.code,setupError.message,setupError.outcome);
         if(c.conflicts.length)throw new PilotError('SOURCE_CONFLICT',c.conflicts.join('; '));
         for(const condition of c.preconditions)if(!Object.hasOwn(bindings,condition))throw new PilotError('PRECONDITION_MISSING',`Provide runtime prerequisite: ${condition}`);
@@ -101,15 +111,15 @@ export async function runPlan(input:unknown,options:RunOptions={}):Promise<Run>{
   }
   } finally { if(service)try{await service.close();}catch(error){cleanupErrors.push(redactor.text(errorInfo(error).message));} }
   const context=await collectContext({projectPath:target.projectPath});
-  const report=RunSchema.parse(redactor.object({schemaVersion:1,id,planId:plan.id,startedAt,finishedAt:new Date().toISOString(),...summarize(results,cleanupErrors),
+  const report=RunSchema.parse(redactor.object({schemaVersion:1,id,planId:plan.id,startedAt,finishedAt:new Date().toISOString(),...summarizeAcceptance(plan.cases,results,cleanupErrors),
     target:{url:target.url ?? 'unavailable',sources:inspection.sources,projectPath:target.projectPath},
     environment:{runner:VERSION,node:process.versions.node,browser:browserVersion,platform:process.platform,viewport:target.viewport,codeRevision:context.git?.revision},
-    scope:plan.scope,gaps:[...plan.gaps,...inspection.gaps,...results.filter(c=>c.outcome==='blocked'||c.outcome==='inconclusive').map(c=>`${c.id}: ${c.attempts.at(-1)?.reason ?? c.outcome}`)],cases:results,cleanupErrors,
+    scope:plan.scope,coverage,gaps:[...plan.gaps,...inspection.gaps,...results.filter(c=>c.outcome==='blocked'||c.outcome==='inconclusive').map(c=>`${c.id}: ${c.attempts.at(-1)?.reason ?? c.outcome}`)],cases:results,cleanupErrors,
     ...(target.evidence.video?{playbackPath:join(store.runDir(id),'recordings.html')} : {}),
     reproduce:`webpilot replay --run ${id} --data-dir ${JSON.stringify(store.root)}`
   }));
-  await writeFile(join(store.runDir(id),'plan.json'),JSON.stringify(plan,null,2)+'\n',{flag:'wx',mode:0o600});
-  await store.saveRun(report,markdownReport(report));await progress.finish({outcome:report.outcome,unstable:report.unstable});return report;
+  await atomicJson(join(store.runDir(id),'coverage-result.json'),coverageResult(snapshot,report,true));
+  await store.saveRun(report,markdownReport(report)+reconciliationMarkdown(snapshot,report));await progress.finish({outcome:report.outcome,unstable:report.unstable});return report;
   }catch(error){await progress.finish({reason:redactor.text(errorInfo(error).message)});throw error;}
 }
 
@@ -127,7 +137,7 @@ export async function saveCase(input:unknown,target:Plan['target'],options:RunOp
   if(options.promote){
     const run=await runPlan({schemaVersion:1,id:`promotion-${randomUUID()}`,target,scope:[c.title],cases:[{...c,state:'draft'}]},options);
     verifiedBy=run.id;
-    c.state=run.exitCode===0?'regression-ready':'draft';if(c.state==='regression-ready')c.verifiedBy=run.id;
+    c.state=run.exitCode===0&&!run.acceptance?.supplementary.issues&&!run.acceptance?.supplementary.incomplete?'regression-ready':'draft';if(c.state==='regression-ready')c.verifiedBy=run.id;
   }else c.state='draft';
   const path=await store.saveCase(c);return {case:c,path,verifiedBy,difference};
 }

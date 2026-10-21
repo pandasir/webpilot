@@ -1,6 +1,6 @@
 import {WebSocket} from 'ws';
 import {dashboardRoot} from './files.js';
-import {endpointAt,ensureDashboard,internal,type Endpoint} from './lifecycle.js';
+import {endpointAt,ensureDashboard,internal,requireCoverageDashboard,type Endpoint} from './lifecycle.js';
 import {MAX_FRAME,type RunMeta,type FrameHeader,encodeFrame} from './protocol.js';
 
 export class DashboardClient{
@@ -16,7 +16,9 @@ export class DashboardClient{
   start(){void this.connect(true);}
   private async connect(start=false){
     try{
-      const e=start?await ensureDashboard(this.root):await endpointAt(this.root);if(!e)return this.retry();if(this.stopped){await internal(e,'/internal/import',{dataDir:this.dataDir}).catch(()=>{});return;}this.endpoint=e;
+      const e=start?await ensureDashboard(this.root):await endpointAt(this.root);if(!e)return this.retry();
+      if(this.meta.mode==='planned-session')await requireCoverageDashboard(e);
+      if(this.stopped){await internal(e,'/internal/import',{dataDir:this.dataDir}).catch(()=>{});return;}this.endpoint=e;
       const ws=new WebSocket(e.url.replace('http:','ws:')+'/internal/executors',{headers:{Authorization:`Bearer ${e.token}`},maxPayload:MAX_FRAME,handshakeTimeout:1500});this.socket=ws;
       ws.on('open',()=>{
         if(this.stopped){ws.close();return;}this.attempts=0;
@@ -26,7 +28,7 @@ export class DashboardClient{
       ws.on('message',raw=>{try{const msg=JSON.parse(raw.toString());if(msg.type==='watch'&&this.watching!==(msg.enabled===true)){this.watching=msg.enabled===true;this.onWatch?.(this.watching);}}catch{}});
       ws.on('error',()=>{});
       ws.on('close',()=>{if(this.socket===ws){this.socket=undefined;if(this.heartbeat)clearInterval(this.heartbeat);this.watching=false;this.onWatch?.(false);this.retry();}});
-    }catch{this.retry();}
+    }catch(error){if(String(error).includes('暂不支持覆盖规划')){console.error(`WebPilot：${(error as Error).message}`);this.close();}else this.retry();}
   }
   private retry(){if(this.stopped)return;this.timer=setTimeout(()=>void this.connect(),Math.min(5000,250*2**Math.min(this.attempts++,5)));this.timer.unref();}
   notify(type='changed'){if(this.socket?.readyState===WebSocket.OPEN&&this.socket.bufferedAmount<65536)this.socket.send(JSON.stringify({type,runId:this.meta.id}));}

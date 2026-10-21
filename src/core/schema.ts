@@ -100,12 +100,16 @@ export const RecordingSchema = z.discriminatedUnion('status',[
   z.object({status:z.literal('omitted'),pageId:Id.optional(),pageName:z.string().optional(),reason:z.string()}).strict()
 ]);
 export const AttemptSchema = z.object({number:z.number().int().positive(),outcome:OutcomeSchema,steps:z.array(StepResultSchema),reason:z.string().optional(),cleanupError:z.string().optional(),recordings:z.array(RecordingSchema).optional()}).strict();
+export const AcceptanceSchema=z.object({
+  formal:z.object({outcome:z.enum(['passed','failed','blocked','inconclusive','none']),total:z.number().int().nonnegative(),passed:z.number().int().nonnegative(),failed:z.number().int().nonnegative(),blocked:z.number().int().nonnegative(),incomplete:z.number().int().nonnegative(),unstable:z.boolean(),cases:z.array(z.object({id:Id,title:z.string(),outcome:OutcomeSchema,unstable:z.boolean()}).strict())}).strict(),
+  supplementary:z.object({total:z.number().int().nonnegative(),matched:z.number().int().nonnegative(),issues:z.number().int().nonnegative(),incomplete:z.number().int().nonnegative(),checks:z.array(z.object({caseId:Id,stepId:Id,status:z.enum(['matched','issue','incomplete'])}).strict())}).strict()
+}).strict();
 export const RunSchema = z.object({
-  schemaVersion:z.literal(1),id:Id,planId:Id,startedAt:z.string(),finishedAt:z.string(),outcome:OutcomeSchema,unstable:z.boolean(),
+  schemaVersion:z.literal(1),id:Id,planId:Id,startedAt:z.string(),finishedAt:z.string(),outcome:OutcomeSchema,unstable:z.boolean(),outcomePolicy:z.literal('formal-v1').optional(),
   target:z.object({url:z.string(),sources:z.record(z.string()),projectPath:z.string().optional()}).strict(),
   environment:z.object({runner:z.string(),node:z.string(),browser:z.string(),platform:z.string(),viewport:z.object({width:z.number(),height:z.number()}),codeRevision:z.string().optional()}).strict(),
-  scope:z.array(z.string()),gaps:z.array(z.string()),cases:z.array(z.object({id:Id,version:z.number(),title:z.string(),outcome:OutcomeSchema,unstable:z.boolean(),attempts:z.array(AttemptSchema)}).strict()),
-  exitCode:z.number().int().min(0).max(3),reproduce:z.string(),cleanupErrors:z.array(z.string()).default([]),playbackPath:z.string().optional()
+  scope:z.array(z.string()),gaps:z.array(z.string()),coverage:z.object({id:Id,revision:z.number().int().positive()}).strict().optional(),cases:z.array(z.object({id:Id,version:z.number(),title:z.string(),outcome:OutcomeSchema,unstable:z.boolean(),attempts:z.array(AttemptSchema)}).strict()),
+  acceptance:AcceptanceSchema.optional(),exitCode:z.number().int().min(0).max(3),reproduce:z.string(),cleanupErrors:z.array(z.string()).default([]),playbackPath:z.string().optional()
 }).strict();
 export type Step = z.infer<typeof StepSchema>;
 export type Assertion = Extract<Step,{source:unknown}>;

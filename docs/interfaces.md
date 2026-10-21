@@ -120,3 +120,43 @@ node dist/cli/index.js prune --days 7
 归档/删除管理写接口返回 `{results:[{id,status,error?}]}`。成功状态为 `archived`、`restored`、`deleted`；部分失败返回逐项 `error`，删除尚未完成返回 `cleanup_pending`，不能按 HTTP 200 推断全成功。重复删除返回已删除结果；缺少永久删除确认字段不会执行删除。活动、尚未清理完毕或执行器状态不明的运行拒绝归档/恢复/删除，但允许通过独立 title 接口改名。改名使用同样的认证、来源与运行归属检查，不接受任意文件路径。详情 SSE 的 `deleted` 事件独立于执行序号，包含 `pending` 或 `deleted` 状态。
 
 归档后永久保存所有已有运行文件，恢复/撤销也不重启过期计时，自动清理与显式 `prune --days` 都跳过永久保存记录。管理文件损坏时保守保留并给出诊断。旧版清理器不认识此规则，带归档数据的存储根不能交给旧版执行器或 prune；回滚时需保留永久保存实现或暂停旧版清理。
+
+## 测试前覆盖规划接口
+
+新增工具均使用已有 MCP 返回格式；规划工具不会启动目标服务或浏览器：
+
+| 工具 | 主要参数 | 行为 |
+|---|---|---|
+| coverage_create | `{draft,bindings?:{}}` | 保存初始清单，返回 manifest、status、currentRevision；启用看板时返回 metadata.planUrl |
+| coverage_read | `{id,revision?}` | 读取当前或指定已提交版本、采用记录和关联运行 |
+| coverage_update | `{id,expectedRevision,requestId,draft,reason,bindings?:{}}` | 原子追加版本；重复 requestId 幂等，不同内容复用 ID 或陈旧写入报错 |
+| coverage_adopt | `{coverage:{id,revision},reference,userConfirmed?:false}` | 采用具体版本；review 必须明确用户采用，generate-only 禁止采用 |
+| session_case_begin | `{sessionId,caseId,coverage:{id,revision}}` | 在同一运行中开始已选用例，准备数据和隔离角色，返回 attempt |
+| session_case_end | `{sessionId}` | 结束用例，检查完整步骤、采集录像并清理数据 |
+| session_case_sync | `{sessionId,coverage:{id,revision}}` | 同步已采用的新版本，可细化未执行定位；拒绝改变已执行步骤 |
+
+`suite_run` 可传 `{coverage:{id,revision},plan?,bindings?,headful?}`，不传 plan 时使用清单内已选用例；提供 plan 时必须与采用版本一致。`session_open` 可传 coverage；`session_act/check` 需附带 `caseId,revision,attempt`，步骤必须与已采用用例的顺序及内容一致。旧增量调用不传 coverage 时仍属探索，不能产生正式覆盖验收通过。
+
+`coverage_create/read/update/adopt`、`session_open` 和 `suite_run` 接受可选 `dashboard:false`，用于用户明确禁用测试中心集成。规划调用不会登记链接；执行调用不会启动或接入测试中心；这样打开的会话在后续用例及关闭调用中也不返回看板链接。仅关闭自动开页仍使用 `dashboard_open {open:false}`，不影响集成。
+
+CoverageDraft 核心字段：`schemaVersion:1,title,mode,status,target,scope,gaps,requirements,items,generation`。mode 为 auto/review/generate-only，status 为 drafting/published/failed。requirements 为 `{id,description,source,caseIds,gap?}`；没有对应 caseIds 时必须说明 gap。items 为 `{id,title,suggestedBy,priority,selected,selectionReason,readiness,reason?,rationale,dimension,preconditions,actions,expectations,executable?}`。expectations 各项为 `{description,source,candidate?}`；executable 使用原 Case schema，并与清单的 id/title 一致。selected 且 ready 必须有 executable；不就绪必须有 reason。suggestedBy 为 user/ai/regression/derived，priority 为 P0/P1/P2，readiness 为 ready/blocked/needs-clarification。
+
+生成限制 generation 为 `{aiSupplemented:false,round:1,maxRounds:2,maxAdditionalCases:12}`；初次创建可设置有限上限，后续不能重置。新增 AI 场景需要递增 round；该上限不删除用户已知验收点。业务预期变化会取消新版本的旧采用；定位细节或仅新增未选建议可保留已采用范围。review 的 userConfirmed 由明确人类回复支持，模型不能代替用户生成同意。
+
+AI 数量按已提交历史中的不同场景累计，删除再补充不能重置上限。修改或移除已有正式断言还需在 executable.change 记录 `{reason,adoptedBy,source}`，source 必须有非 inferred 的正式来源；否则返回 ASSERTION_ADOPTION_REQUIRED。运行内不得移除已尝试用例、改变已执行步骤、倒退采用版本，或替换活动用例已准备好的角色和前置条件。
+
+CLI 支持 `run/replay --coverage /path/to/coverage-ref.json`，引用文件为 `{"id":"实际计划ID","revision":1}`。已有命令不传 coverage 时自动从原结构化用例派生清单，不调用模型。
+
+```sh
+# 仅生成确定性覆盖清单，不启动目标浏览器、服务或数据脚本
+node dist/cli/index.js run --plan plan.json --preview-only --data-dir .webpilot/data --no-dashboard
+
+# 原命令保持可用，执行前保存派生清单
+node dist/cli/index.js replay --plan plan.json --data-dir .webpilot/data
+```
+
+常见错误包括 PLAN_NOT_ADOPTED、REVIEW_REQUIRED、PLAN_VERSION_CONFLICT、COVERAGE_MISMATCH、UNPLANNED_STEP、CASE_ASSOCIATION_MISMATCH 和 PLAN_EXPIRED；错误不会通过修改业务预期自动恢复。仅生成或待审阅只提供计划入口，实际执行后仍需交付本次运行链接。
+
+### 验收汇总字段
+
+新套件和覆盖计划会话报告可带 `outcomePolicy:"formal-v1"` 与 `acceptance`。`acceptance.formal` 包含正式用例结论、数量、逐用例结果和不稳定标记；`acceptance.supplementary` 包含 `matched/issues/incomplete` 数量及逐候选检查的 `caseId/stepId/status`。总体 `outcome/exitCode` 以正式验收为准，补充发现单独保留；仅候选检查仍为 `inconclusive`。原始 `cases[].outcome` 与步骤诊断不会改写，旧报告缺省这些新字段仍可读取。详见 [报告规则](reporting.md)。
