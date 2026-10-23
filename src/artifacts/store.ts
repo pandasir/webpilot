@@ -59,7 +59,12 @@ export function markdownReport(run:Run){
     `视口尺寸：${run.environment.viewport.width} × ${run.environment.viewport.height}`,
     `运行器版本：${run.environment.runner}；浏览器版本：${run.environment.browser}`,'',
     ...(run.playbackPath?[`[观看流程录像](${run.playbackPath})`,'录像为未经脱敏的敏感本地证据。','']:[]),
-    '## 结果汇总','',...Object.entries(outcomeLabels).map(([status,label])=>`${label}：${run.cases.filter(c=>c.outcome===status).length} 条用例`),
+    '## 结果汇总','',...(run.acceptance?[
+      `正式验收：${run.acceptance.formal.outcome==='none'?'仅探索，未作验收':outcomeLabels[run.acceptance.formal.outcome]}；${run.acceptance.formal.passed} / ${run.acceptance.formal.total} 条正式用例通过。`,
+      `补充检查：${run.acceptance.supplementary.matched} 项符合预期；${run.acceptance.supplementary.issues} 项发现异常，待确认产品规则；${run.acceptance.supplementary.incomplete} 项未完成。`,
+      '补充检查不计入正式验收通过或失败；清理异常和正式用例的不稳定重试仍会影响最终结论与退出码。','',
+      '原始用例执行结果（包含补充检查）：'
+    ]:[]),...Object.entries(outcomeLabels).map(([status,label])=>`${label}：${run.cases.filter(c=>c.outcome===status).length} 条用例`),
     ...(run.unstable?['存在先失败后通过的重试，不能视为稳定通过。']:[]),'',
     '## 覆盖范围','',...run.scope.map(s=>`- ${reportText(s)}`),'',
     '## 未验证项与限制','',...(run.gaps.length?run.gaps.map(s=>`- ${gapText(s)}`):['未记录额外覆盖缺口。']),'','## 用例结果',''];

@@ -1,3 +1,4 @@
+import {CoverageStore} from '../artifacts/coverage.js';
 import {EventEmitter} from 'node:events';
 import {readdir,realpath,lstat} from 'node:fs/promises';
 import {join} from 'node:path';
@@ -7,6 +8,7 @@ import {atomicJson,jsonFile,privateDir} from './files.js';
 import {readRunFile,loadRun,publicRun,type LiveRun} from './projection.js';
 
 export class Registry extends EventEmitter{
+  readonly plans=new Map<string,{dataDir:string;record:Awaited<ReturnType<CoverageStore['read']>>}>();
   readonly runs=new Map<string,{dir:string;state:LiveRun;fingerprint:string;lastSeen:number;checkedAt:number}>();
   private roots=new Set<string>();
   readonly deleted=new Map<string,string>();
@@ -36,8 +38,15 @@ export class Registry extends EventEmitter{
     try{for(const file of await readdir(join(canonical,'.run-management'))){if(!file.endsWith('.delete.json'))continue;const id=file.slice(0,-12);if(!Id.safeParse(id).success)continue;const state=await deletionState(canonical,id);if(state){this.locations.set(id,canonical);this.deleted.set(id,state.status);}}}catch{}
     let count=0;
     try{for(const entry of await readdir(join(canonical,'runs'),{withFileTypes:true}))if(entry.isDirectory()&&!entry.isSymbolicLink()&&Id.safeParse(entry.name).success){try{await this.add(canonical,entry.name);count++;}catch{}}}catch{}
-    if(persist)await this.save();return count;
+    await this.refreshPlans();if(persist)await this.save();return count;
   }
+  private async refreshPlans(){
+    const found=new Set<string>();let changed=false;
+    for(const dataDir of this.roots)for(const record of await new CoverageStore(dataDir).list()){const id=record.manifest.id;const previous=this.plans.get(id);if(previous&&previous.dataDir!==dataDir)continue;found.add(id);if(JSON.stringify(previous?.record)!==JSON.stringify(record)){this.plans.set(id,{dataDir,record});changed=true;}}
+    for(const id of this.plans.keys())if(!found.has(id)){this.plans.delete(id);changed=true;}
+    if(changed)this.emit('plans.changed');
+  }
+  async plan(id:string,revision?:number){const entry=this.plans.get(Id.parse(id));if(!entry)return undefined;return new CoverageStore(entry.dataDir).read({id,revision});}
   private async add(dataDir:string,id:string){
     Id.parse(id);const location=this.locations.get(id);if(location&&location!==dataDir)throw new Error('Run id already registered elsewhere');if(this.deleted.has(id)||await deletionState(dataDir,id))throw new Error('Run deleted');const dir=join(dataDir,'runs',id);
     const marker=await readRunFile(dir,'.owner.json');if(marker.owner!=='webpilot'||marker.id!==id)throw new Error('Unowned run');
@@ -57,7 +66,7 @@ export class Registry extends EventEmitter{
     this.refreshing=this.doRefresh(id,connected).catch(()=>{}).finally(()=>{this.refreshing=undefined;});return this.refreshing;
   }
   private async doRefresh(only?:string,connected=false){
-    let removed=false;
+    if(!only)await this.refreshPlans();let removed=false;
     for(const [id,dir] of this.entries){if(only&&id!==only)continue;const old=this.runs.get(id);
 
       try{

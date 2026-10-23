@@ -12,6 +12,7 @@ import {z} from 'zod';
 import {Id} from './protocol.js';
 import {dataRoot} from '../core/runtime.js';
 import {TitleSchema} from '../core/titles.js';
+import {acceptanceStatus} from '../core/acceptance.js';
 
 const key=()=>randomBytes(32).toString('base64url');
 const equal=(a:string,b:string)=>{const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&timingSafeEqual(x,y);};
@@ -45,6 +46,7 @@ export async function startDashboard(options:{root:string;port?:number;defaultDa
     }
   };
   registry.on('changed',notify);
+  registry.on('plans.changed',()=>{for(const sub of subscribers)if(!sub.id)sub.res.write('event: plans.changed\ndata: {}\n\n');});
   registry.on('deleted',(id:string,status:string)=>{
     overviewSeq++;
     for(const sub of subscribers){if(sub.id&&sub.id!==id)continue;sub.res.write(`event: ${sub.id?'deleted':'changed'}\ndata: ${JSON.stringify({id,status})}\n\n`);if(sub.id&&status==='deleted'){sub.res.end();subscribers.delete(sub);}}
@@ -57,10 +59,10 @@ export async function startDashboard(options:{root:string;port?:number;defaultDa
     try{
       if(!hostOk(req)){json(res,403,{error:'Invalid host'});return;}
       const path=new URL(req.url??'/',url).pathname;
-      if(path==='/api/health'&&req.method==='GET'){json(res,200,{name:'webpilot-dashboard',protocolVersion:1,instance});return;}
+      if(path==='/api/health'&&req.method==='GET'){json(res,200,{name:'webpilot-dashboard',protocolVersion:1,instance,capabilities:{coveragePlanning:1}});return;}
       if(path.startsWith('/internal/')){
         if(!internalAuth(req)){json(res,403,{error:'Unauthorized'});return;}
-        if(path==='/internal/status'&&req.method==='GET'){json(res,200,{protocolVersion:1,instance});return;}
+        if(path==='/internal/status'&&req.method==='GET'){json(res,200,{protocolVersion:1,instance,capabilities:{coveragePlanning:1}});return;}
         if(req.method!=='POST'){json(res,405,{error:'Method not allowed'});return;}
         const input=await body(req);
         if(path==='/internal/bootstrap'){
@@ -109,13 +111,16 @@ export async function startDashboard(options:{root:string;port?:number;defaultDa
           json(res,200,{results});return;
         }
         const parsed=new URL(req.url!,url);
+        if(path==='/api/plans'){const rows=[...registry.plans.values()].map(e=>e.record).sort((a,b)=>b.manifest.createdAt.localeCompare(a.manifest.createdAt));json(res,200,{plans:rows,total:rows.length});return;}
+        const planMatch=path.match(/^\/api\/plans\/([a-zA-Z0-9._-]+)$/);
+        if(planMatch){try{const revision=parsed.searchParams.has('revision')?Number(parsed.searchParams.get('revision')):undefined;const plan=await registry.plan(planMatch[1],revision);json(res,plan?200:404,plan??{error:'覆盖计划不可用或已过期'});}catch{json(res,404,{error:'覆盖计划不可用或已过期'});}return;}
         if(path==='/api/runs'){
           const status=parsed.searchParams.get('status'),project=parsed.searchParams.get('project');
           const page=Math.max(1,Math.min(100000,Number(parsed.searchParams.get('page'))||1));
           const scope=parsed.searchParams.get('scope')??'current';if(!['current','archived'].includes(scope)){json(res,400,{error:'Invalid scope'});return;}
           const all=[...registry.runs.values()].map(e=>e.state).filter(r=>!registry.deleted.has(r.id)&&!!r.management?.archivedAt===(scope==='archived'));
-          const rows=all.filter(r=>(!status||(status==='active'?!['finished','interrupted','historical'].includes(r.lifecycle):r.outcome===status||r.lifecycle===status))&&(!project||`${r.meta.project??''} ${r.meta.target} ${r.meta.title}`.toLowerCase().includes(project.toLowerCase()))).sort((a,b)=>b.meta.startedAt.localeCompare(a.meta.startedAt));
-          const summary={active:all.filter(r=>!['finished','interrupted','historical'].includes(r.lifecycle)).length,passed:all.filter(r=>r.outcome==='passed').length,failed:all.filter(r=>r.outcome==='failed').length,other:all.filter(r=>['blocked','inconclusive'].includes(r.outcome??'')||['interrupted','historical'].includes(r.lifecycle)).length};
+          const rows=all.filter(r=>(!status||(status==='active'?!['finished','interrupted','historical'].includes(r.lifecycle):acceptanceStatus(r)===status||r.lifecycle===status))&&(!project||`${r.meta.project??''} ${r.meta.target} ${r.meta.title}`.toLowerCase().includes(project.toLowerCase()))).sort((a,b)=>b.meta.startedAt.localeCompare(a.meta.startedAt));
+          const summary={active:all.filter(r=>!['finished','interrupted','historical'].includes(r.lifecycle)).length,passed:all.filter(r=>acceptanceStatus(r)==='passed').length,failed:all.filter(r=>acceptanceStatus(r)==='failed').length,other:all.filter(r=>['blocked','inconclusive','exploratory'].includes(acceptanceStatus(r))||['interrupted','historical'].includes(r.lifecycle)).length};
           json(res,200,{total:rows.length,page,pageSize:20,summary,runs:rows.slice((page-1)*20,page*20).map(publicRun),cursor:`${instance}:${overviewSeq}`});return;
         }
         const match=path.match(/^\/api\/runs\/([a-zA-Z0-9._-]+)(?:\/(events|report|artifacts)(?:\/([a-zA-Z0-9._-]+))?)?$/);
@@ -134,7 +139,7 @@ export async function startDashboard(options:{root:string;port?:number;defaultDa
         const entry=registry.runs.get(match[1]);if(!entry){json(res,404,{error:'运行不可用'});return;}
         if(!match[2]){json(res,200,publicRun(entry.state));return;}
         if(match[2]==='report'){
-          try{const report=await readRunFile(entry.dir,entry.state.meta.mode==='suite'?'report.json':'session.json');if(await registry.unavailable(match[1])){json(res,410,{error:'该运行已被删除'});return;}json(res,200,report);}catch{json(res,404,{error:'报告尚未就绪或已过期'});}return;
+          try{const report=await readRunFile(entry.dir,entry.state.meta.mode==='exploration'?'session.json':'report.json');if(await registry.unavailable(match[1])){json(res,410,{error:'该运行已被删除'});return;}json(res,200,report);}catch{json(res,404,{error:'报告尚未就绪或已过期'});}return;
         }
         const artifact=entry.state.artifacts.find(a=>a.id===match[3]);if(!artifact){json(res,404,{error:'证据不可用或已过期'});return;}
         let file:Awaited<ReturnType<typeof openArtifact>>;try{file=await openArtifact(entry.dir,artifact.path);}catch{json(res,410,{error:'证据不可用或已过期'});return;}
@@ -151,7 +156,7 @@ export async function startDashboard(options:{root:string;port?:number;defaultDa
       }
       if(req.method!=='GET'){json(res,405,{error:'Method not allowed'});return;}
       const asset=path.match(/^\/assets\/([a-zA-Z0-9_.-]+)$/);const file=asset?`assets/${asset[1]}`:'index.html';
-      if(!asset&&path!=='/'&&!/^\/runs\/[a-zA-Z0-9._-]+$/.test(path)&&path!=='/compare'){json(res,404,{error:'Not found'});return;}
+      if(!asset&&path!=='/'&&!/^\/runs\/[a-zA-Z0-9._-]+$/.test(path)&&path!=='/compare'&&path!=='/plans'&&!/^\/plans\/[a-zA-Z0-9._-]+$/.test(path)){json(res,404,{error:'Not found'});return;}
       const content=await readFile(fileURLToPath(new URL(`./public/${file}`,import.meta.url)));
       res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'text/html; charset=utf-8');res.end(content);
     }catch{if(!res.headersSent)json(res,400,{error:'请求无效或数据暂不可用'});else res.destroy();}

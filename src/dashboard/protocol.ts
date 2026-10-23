@@ -6,11 +6,13 @@ export const MAX_FRAME=2*1024*1024;
 export const MAX_BUFFER=2*1024*1024;
 export const Id=z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/);
 export const IdentitySchema=z.object({pid:z.number().int().positive(),nonce:z.string().uuid(),started:z.string().optional()}).strict();
-export const MetaSchema=z.object({protocolVersion:z.literal(1),id:Id,title:z.string(),titleSource:z.enum(['task','target']).optional(),mode:z.enum(['suite','exploration']),target:z.string(),project:z.string().optional(),startedAt:z.string(),owner:IdentitySchema,totalCases:z.number().int().nonnegative().optional(),cases:z.array(z.object({id:Id,title:z.string(),version:z.number().int().positive()})).default([]),live:z.boolean().default(true)}).strict();
+export const MetaSchema=z.object({protocolVersion:z.literal(1),id:Id,title:z.string(),titleSource:z.enum(['task','target']).optional(),mode:z.enum(['suite','exploration','planned-session']),target:z.string(),project:z.string().optional(),startedAt:z.string(),owner:IdentitySchema,totalCases:z.number().int().nonnegative().optional(),cases:z.array(z.object({id:Id,title:z.string(),version:z.number().int().positive()})).default([]),live:z.boolean().default(true)}).strict();
 export type RunMeta=z.infer<typeof MetaSchema>;
 export const LiveRunSchema=z.object({id:Id,meta:MetaSchema.extend({owner:IdentitySchema.optional()}),seq:z.number().int().nonnegative(),lifecycle:z.enum(['preparing','running','collecting','cleaning','finished','interrupted','historical']),connection:z.enum(['connected','disconnected','unknown']),outcome:OutcomeSchema.optional(),cases:z.array(z.object({id:Id,title:z.string(),version:z.number().int().positive(),attempts:z.array(AttemptSchema)}))}).passthrough().superRefine((run,ctx)=>{if(run.meta.mode==='exploration'&&run.outcome==='passed')ctx.addIssue({code:'custom',message:'Exploration cannot imply formal acceptance'});});
 const association={caseId:Id.optional(),attempt:z.number().int().positive().optional(),stepId:Id.optional(),pageId:Id.optional()};
 const payloads={
+  'observation.finished':z.object({url:z.string(),title:z.string()}).strict(),
+  'coverage.updated':z.object({revision:z.number().int().positive(),cases:z.array(z.object({id:Id,title:z.string(),version:z.number().int().positive()}).strict())}).strict(),
   'run.created':z.object({}).strict(),
   'phase.changed':z.object({phase:z.enum(['preparing','running','collecting','cleaning']),message:z.string().optional()}).strict(),
   'case.started':z.object({}).strict(),

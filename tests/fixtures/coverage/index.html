@@ -1,0 +1,7 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>商品筛选验收样例</title><body>
+<h1>商品目录</h1><label>搜索商品<input id="search"></label><label for="category">商品分类</label><select id="category"><option value="">全部分类</option><option value="家居">家居</option><option value="数码">数码</option></select><button id="reset">清空条件</button><ul id="products"></ul><p role="status"></p>
+<script>
+const products=[{name:'蓝色杯子',category:'家居'},{name:'白色花瓶',category:'家居'},{name:'无线耳机',category:'数码'}];
+function render(){const q=document.querySelector('#search').value.trim(),category=document.querySelector('#category').value;const rows=products.filter(p=>(!q||p.name.includes(q))&&(!category||p.category===category));document.querySelector('#products').replaceChildren(...rows.map(p=>{const item=document.createElement('li');item.textContent=p.name;return item;}));document.querySelector('[role=status]').textContent=rows.length?'':'暂无匹配商品';}
+document.querySelector('#search').addEventListener('input',render);document.querySelector('#category').addEventListener('change',render);document.querySelector('#reset').addEventListener('click',()=>{document.querySelector('#search').value='';document.querySelector('#category').value='';render();});render();
+</script></body></html>

@@ -10,6 +10,8 @@ import {runPlan,saveCase} from '../dist/core/runner.js';
 import {exportPlan,verifyExport} from '../dist/artifacts/export.js';
 import {Store} from '../dist/artifacts/store.js';
 import {TargetSchema} from '../dist/core/schema.js';
+import {coverageFromPlan} from '../dist/core/coverage.js';
+import {PlanSchema} from '../dist/core/schema.js';
 import {BrowserSession} from '../dist/browser/session.js';
 import {Budget} from '../dist/core/budget.js';
 import {StepSchema} from '../dist/core/schema.js';
@@ -28,10 +30,14 @@ test('MCP stdio schema, structured errors, suite and CLI replay agree without mo
   const f=await fixture();const client=new Client({name:'test',version:'1'});
   try{
     await client.connect(new StdioClientTransport({command:process.execPath,args:['dist/mcp/index.js'],env:{...process.env,WEBPILOT_DATA_DIR:f.dataDir},stderr:'pipe'}));
-    const inventory=await client.listTools();assert.equal(inventory.tools.length,16);assert.ok(inventory.tools.find(t=>t.name==='session_act').inputSchema.properties.step);
+    const inventory=await client.listTools();assert.equal(inventory.tools.length,23);assert.ok(inventory.tools.find(t=>t.name==='session_act').inputSchema.properties.step);for(const name of ['coverage_create','coverage_read','coverage_update','coverage_adopt','session_case_begin','session_case_end','session_case_sync'])assert.ok(inventory.tools.some(t=>t.name===name));
     const expired=await client.callTool({name:'session_observe',arguments:{sessionId:'absent'}});assert.equal(expired.isError,true);assert.equal(expired.structuredContent.error.code,'SESSION_EXPIRED');
     const p=plan(f.url,loginSteps());
-    const mcp=(await client.callTool({name:'suite_run',arguments:{plan:p}})).structuredContent.data;
+    const preview=(await client.callTool({name:'coverage_create',arguments:{draft:coverageFromPlan(PlanSchema.parse(p))}})).structuredContent;assert.equal(preview.metadata,undefined);
+    const coverage={id:preview.data.manifest.id,revision:1};assert.equal((await client.callTool({name:'coverage_read',arguments:{id:coverage.id}})).structuredContent.data.currentRevision,1);
+    const refused=await client.callTool({name:'suite_run',arguments:{coverage}});assert.equal(refused.structuredContent.error.code,'PLAN_NOT_ADOPTED');
+    await client.callTool({name:'coverage_adopt',arguments:{coverage,reference:'已发布清单'}});
+    const mcp=(await client.callTool({name:'suite_run',arguments:{plan:p,coverage}})).structuredContent.data;
     const file=join(f.dataDir,'plan.json');await writeFile(file,JSON.stringify(p));
     const c=await cli(['replay','--plan',file,'--data-dir',f.dataDir,'--json']);assert.equal(c.code,0,c.stderr);
     const replay=JSON.parse(c.stdout);assert.equal(replay.outcome,mcp.outcome);assert.equal(replay.unstable,mcp.unstable);

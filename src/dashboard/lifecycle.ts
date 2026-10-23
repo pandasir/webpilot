@@ -16,6 +16,11 @@ export async function internal<T=any>(e:Endpoint,path:string,body?:unknown):Prom
   const response=await fetch(e.url+path,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${e.token}`,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(1500)});
   if(!response.ok)throw new Error(`Dashboard request failed (${response.status})`);return response.json() as Promise<T>;
 }
+export async function requireCoverageDashboard(e:Endpoint){
+  const status=await internal(e,'/internal/status');
+  if(status.instance!==e.instance||status.protocolVersion!==1||status.capabilities?.coveragePlanning!==1)throw new Error('测试中心暂不支持覆盖规划，请更新并重启测试中心；清单已保存在本地。');
+  return e;
+}
 export async function dashboardStatus(root=dashboardRoot()){
   const e=await endpointAt(root);if(!e)return;
   try{const health=await internal(e,'/internal/status');if(health.instance!==e.instance)throw new Error('Dashboard identity mismatch');if(health.protocolVersion!==1||e.protocolVersion!==1)throw new Error('Dashboard protocol incompatible');return e;}catch(error){

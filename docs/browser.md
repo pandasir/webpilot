@@ -19,3 +19,9 @@ Assertions include a source and optional `candidate`:
 - `download`: clicking `locator` must download the exact `filename`.
 
 Values can be literals or runtime `{ ref }` values. Use references for credentials and machine-dependent files. Browser scripts are not a public step operation. The executor uses condition-based waits and stores action/expectation/actual results separately. Unexpected navigation is stopped and reported. Source conflicts, login readiness, missing files and unsupported operations never count as a business pass.
+
+## 有覆盖清单的增量会话
+
+session_open 关联已采用覆盖版本后，session_observe 是前置观察。业务动作必须在 session_case_begin/end 内，并提供当前 caseId、revision、attempt。每条用例独立准备/清理数据及角色 context，整个请求共用 sessionId、runId 和总预算；角色状态不互相污染。
+
+步骤顺序、预期或未执行定位改变时须先发布相应清单版本，按模式采用后 session_case_sync；已执行步骤不能改写。允许的重试必须先结束失败尝试，并遵守 attempts 上限。未执行完即关闭会话不算通过。浏览器或预算阻塞时保留证据和缺口，不自动新建替代运行。

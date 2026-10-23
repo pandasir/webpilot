@@ -12,7 +12,7 @@ import {MetaSchema,LiveRunSchema,ProgressEventSchema,HandshakeSchema,encodeFrame
 import {dashboardRoot,openArtifact,atomicJson,ownerAlive} from '../dist/dashboard/files.js';
 import {initialRun,applyEvent,parseEvents,loadRun,publicRun} from '../dist/dashboard/projection.js';
 import {startDashboard} from '../dist/dashboard/server.js';
-import {openDashboard,internal,stopDashboard,ensureDashboard,endpointAt} from '../dist/dashboard/lifecycle.js';
+import {openDashboard,internal,stopDashboard,ensureDashboard,endpointAt,requireCoverageDashboard} from '../dist/dashboard/lifecycle.js';
 import {Progress} from '../dist/core/progress.js';
 import {Store} from '../dist/artifacts/store.js';
 import {Redactor} from '../dist/artifacts/redaction.js';
@@ -136,6 +136,14 @@ test('startup reclaims a dead owner lock, detects reused process identities and 
     await stopDashboard(root);await pause(150);
     service=await startDashboard({root,port,defaultDataDir:join(root,'data')});assert.notEqual(Number(new URL(service.url).port),port);
   }finally{await service?.close();await stopDashboard(root).catch(()=>{});await new Promise(ok=>occupied.close(ok));await rm(root,{recursive:true,force:true});}
+});
+
+test('coverage capability detects a legacy dashboard without replacing its live service',async()=>{
+  const f=await fixture();const legacy=createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({instance:'legacy',protocolVersion:1}));});
+  try{await new Promise(ok=>legacy.listen(0,'127.0.0.1',ok));const old={url:`http://127.0.0.1:${legacy.address().port}`,instance:'legacy',token:'local'};
+    await assert.rejects(()=>requireCoverageDashboard(old),/更新并重启/);assert.equal((await fetch(old.url)).status,200);
+    const current=await endpointAt(join(f.root,'state'));assert.equal((await requireCoverageDashboard(current)).instance,current.instance);
+  }finally{await new Promise(ok=>legacy.close(ok));await f.close();}
 });
 
 test('a live incompatible service is rejected and an old service cannot delete a replacement endpoint',async()=>{
