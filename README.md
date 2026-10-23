@@ -416,7 +416,7 @@ node scripts/compatibility-check.mjs
 node scripts/host-check.mjs .webpilot/marketplace
 ```
 
-测试需要 loopback 服务和启动 Chromium 进程的权限。五类真实样例和缺陷集的结果见 [兼容记录](docs/compatibility.md)。测试中心的分项验证见 [实时看板验收](docs/dashboard-acceptance.md)、[工作台界面验收](docs/workspace-ui-acceptance.md)、[运行管理验收](docs/run-management-acceptance.md) 和 [运行标题验收](docs/run-title-acceptance.md)。
+测试需要 loopback 服务和启动 Chromium 进程的权限。五类真实样例和缺陷集的结果见 [兼容记录](docs/compatibility.md)。测试中心的分项验证见 [实时看板验收](docs/dashboard-acceptance.md)、[工作台界面验收](docs/workspace-ui-acceptance.md)、[视觉改版验收](docs/dashboard-visual-refresh.md)、[预测试覆盖率与验收](docs/pretest-coverage-acceptance.md)、[运行管理验收](docs/run-management-acceptance.md) 和 [运行标题验收](docs/run-title-acceptance.md)。
 
 ## 相关文档
 
@@ -426,6 +426,7 @@ node scripts/host-check.mjs .webpilot/marketplace
 | [项目接入](docs/project.md) | 目标项目、启动命令与数据准备 |
 | [接口说明](docs/interfaces.md) | MCP 工具、CLI 命令与 schema |
 | [规划](docs/planning.md) | 计划生成与执行 |
+| [预测试覆盖率与验收](docs/pretest-coverage-acceptance.md) | 覆盖率规划与验收报告 |
 | [报告](docs/reporting.md) | 报告结构、脱敏与证据 |
 | [资产](docs/assets.md) | 用例、运行与存储布局 |
 | [本地测试中心](docs/dashboard.md) | 看板配置、访问机制与恢复规则 |
