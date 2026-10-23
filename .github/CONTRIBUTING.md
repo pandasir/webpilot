@@ -20,6 +20,14 @@ WebPilot 是本地执行的验收工具，很多“看起来像 bug”的问题�
 
 只想问“怎么用”，不用开 issue，先翻 [README](README.md) 和 [接口说明](docs/interfaces.md)。
 
+## 两个托管平台的模板不一样
+
+`.github/ISSUE_TEMPLATE/` 下是 GitHub 专用的 Issue Forms（YAML 表单，能强制必填、有下拉选项），只在 GitHub 仓库生效。
+
+`.gitlab/issue_templates/` 下是 GitLab 版的 Markdown 模板，字段与 GitHub 版一一对应，但 GitLab 只支持 Markdown：没有必填校验，也没有下拉选项，标签靠 `/label` quick action 添加。
+
+改模板时两边都要改，别只改一边。
+
 ## 一个高质量的 issue 长什么样
 
 - 说清**期望**和**实际**，而不是先猜原因。
