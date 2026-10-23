@@ -20,8 +20,9 @@ const json=(res:ServerResponse,status:number,value:unknown)=>{res.writeHead(stat
 async function body(req:IncomingMessage){let data='';for await(const part of req){data+=part;if(data.length>65536)throw new Error('Request too large');}return JSON.parse(data||'{}');}
 function send(ws:WebSocket,value:unknown){if(ws.readyState===WebSocket.OPEN&&ws.bufferedAmount<65536)ws.send(JSON.stringify(value));}
 
-export async function startDashboard(options:{root:string;port?:number;defaultDataDir?:string}){
+export async function startDashboard(options:{root:string;port?:number;defaultDataDir?:string;openedGraceMs?:number}){
   const root=options.root;await privateDir(root);
+  const openedGraceMs=options.openedGraceMs??45000;
   const instance=randomUUID(),token=key(),nonce=randomUUID();const registry=new Registry(root);
   const tickets=new Map<string,number>(),sessions=new Map<string,number>();
   try{for(const [key,expires]of await jsonFile(join(root,'sessions.json')))if(typeof key==='string'&&typeof expires==='number'&&expires>Date.now())sessions.set(key,expires);}catch{}
@@ -29,7 +30,7 @@ export async function startDashboard(options:{root:string;port?:number;defaultDa
   const viewers=new Map<string,Set<WebSocket>>();const subscribers=new Set<{res:ServerResponse;id?:string}>();
   const media=new Map<string,Set<ServerResponse>>();
   const wss=new WebSocketServer({noServer:true,maxPayload:MAX_FRAME});
-  let url='',opened=false,lease:{id:string;expires:number}|undefined,closing:Promise<void>|undefined;let overviewSeq=0;
+  let url='',opened=false,lease:{id:string;expires:number}|undefined,closing:Promise<void>|undefined;let overviewSeq=0;let openedGrace:NodeJS.Timeout|undefined;
   const authenticated=(req:IncomingMessage)=>{const cookie=(req.headers.cookie??'').split(';').map(s=>s.trim()).find(s=>s.startsWith('webpilot_session='))?.slice(17);return !!cookie&&(sessions.get(cookie)??0)>Date.now();};
   const internalAuth=(req:IncomingMessage)=>!req.headers.origin&&equal(req.headers.authorization??'',`Bearer ${token}`);
   const hostOk=(req:IncomingMessage)=>req.headers.host===new URL(url).host;
@@ -129,10 +130,12 @@ export async function startDashboard(options:{root:string;port?:number;defaultDa
           res.writeHead(200,{'Content-Type':'text/event-stream','Connection':'keep-alive','X-Accel-Buffering':'no'});
           const sub={res,id};subscribers.add(sub);
           // A real authenticated page also counts when opened inside Codex or via a returned link.
-          opened=true;
+          clearTimeout(openedGrace);opened=true;
           if(id){const state=registry.runs.get(id)!.state;res.write(`id: ${state.seq}\nevent: state\ndata: ${JSON.stringify(publicRun(state))}\n\n`);}
           else res.write(`id: ${instance}:${overviewSeq}\nevent: reset\ndata: {}\n\n`);
-          req.on('close',()=>subscribers.delete(sub));return;
+          req.on('close',()=>{subscribers.delete(sub);
+            // Forget the page only after a quiet period so a quick refresh or reconnect does not pop a new tab.
+            if(!subscribers.size&&!closing)openedGrace=setTimeout(()=>{opened=false;},openedGraceMs).unref();});return;
         }
         if(!match){json(res,404,{error:'Unknown API'});return;}
         if(await registry.unavailable(match[1])){json(res,410,{error:registry.deleted.get(match[1])==='pending'?'删除待完成，请重试清理':'该运行已被删除'});return;}
@@ -214,7 +217,7 @@ export async function startDashboard(options:{root:string;port?:number;defaultDa
     return closing??=shutdown();
   }
   async function shutdown(){
-    clearInterval(maintenance);for(const s of subscribers)s.res.end();subscribers.clear();
+    clearTimeout(openedGrace);clearInterval(maintenance);for(const s of subscribers)s.res.end();subscribers.clear();
     for(const ws of wss.clients)ws.terminate();wss.close();await registry.close();
     server.closeAllConnections();await new Promise<void>(ok=>server.close(()=>ok()));
     try{if((await jsonFile(join(root,'endpoint.json'))).instance===instance){await rm(join(root,'endpoint.json'),{force:true});await rm(join(root,'credentials.json'),{force:true});}}catch{}

@@ -124,6 +124,21 @@ test('authenticated dashboard pages suppress duplicate openings, including after
   }finally{controller?.abort();await service.close();await f.close();}
 });
 
+test('a closed dashboard page is forgotten after a grace period, so a later run auto-opens again',async()=>{
+  const f=await fixture();const state=join(f.root,'state-grace');let service;
+  try{
+    service=await startDashboard({root:state,port:0,defaultDataDir:f.dataDir,openedGraceMs:200});
+    const headers=await authenticate(service);const controller=new AbortController();
+    const response=await fetch(service.url+'/api/events',{headers,signal:controller.signal});
+    assert.equal(response.status,200);const reader=response.body.getReader();await reader.read();
+    assert.equal((await openDashboard({root:state,open:false})).shouldOpen,false);
+    controller.abort();await reader.cancel().catch(()=>{});
+    assert.equal((await openDashboard({root:state,open:false})).shouldOpen,false,'the grace period keeps a quick refresh from popping a new tab');
+    await pause(500);
+    assert.equal((await openDashboard({root:state,open:false})).shouldOpen,true,'a later run auto-opens once the page is truly gone');
+  }finally{await service?.close();await f.close();}
+});
+
 test('startup reclaims a dead owner lock, detects reused process identities and falls back from an occupied port',async()=>{
   const root=await mkdtemp(join(tmpdir(),'webpilot-lock-'));const occupied=createServer((req,res)=>res.end('other application'));
   await new Promise(ok=>occupied.listen(0,'127.0.0.1',ok));const port=occupied.address().port;
