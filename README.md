@@ -6,6 +6,8 @@ Codex 读需求、规划步骤、分析失败原因；本机执行器负责真�
 
 本地测试中心把多个聊天、多个项目的测试进度收在一个页面：浏览器直播、分步截图、报告和录像、两条运行并排看，还有运行重命名、归档永久保存和批量管理。
 
+![WebPilot 本地测试中心：两条运行并排直播、步骤预期与实际结果、覆盖清单](assets/demo.gif)
+
 ## 目录
 
 - [安装](#安装)
@@ -414,6 +416,10 @@ npm test
 npm ci --ignore-scripts --prefix tests/fixtures
 node scripts/compatibility-check.mjs
 node scripts/host-check.mjs .webpilot/marketplace
+
+# 重新生成 README 演示 GIF（macOS，需要 ffmpeg）
+node scripts/capture-readme-demo.mjs .webpilot/readme-frames
+scripts/build-demo-gif.sh .webpilot/readme-frames assets/demo.gif
 ```
 
 测试需要 loopback 服务和启动 Chromium 进程的权限。五类真实样例和缺陷集的结果见 [兼容记录](docs/compatibility.md)。测试中心的分项验证见 [实时看板验收](docs/dashboard-acceptance.md)、[工作台界面验收](docs/workspace-ui-acceptance.md)、[视觉改版验收](docs/dashboard-visual-refresh.md)、[预测试覆盖率与验收](docs/pretest-coverage-acceptance.md)、[运行管理验收](docs/run-management-acceptance.md) 和 [运行标题验收](docs/run-title-acceptance.md)。

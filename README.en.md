@@ -8,6 +8,8 @@ Codex reads the requirement, plans the steps, and analyzes failures. The local r
 
 The local test center pulls test progress from multiple chats and multiple projects into one page: live browser view, step-by-step screenshots, reports and recordings, two runs side by side, plus run renaming, permanent archiving, and batch management.
 
+![WebPilot's local test center: two runs watched side by side, step expectations versus actual results, and the coverage list](assets/demo.gif)
+
 ## Contents
 
 - [Install](#install)
@@ -416,6 +418,10 @@ npm test
 npm ci --ignore-scripts --prefix tests/fixtures
 node scripts/compatibility-check.mjs
 node scripts/host-check.mjs .webpilot/marketplace
+
+# Regenerate the README demo GIF (macOS, needs ffmpeg)
+node scripts/capture-readme-demo.mjs .webpilot/readme-frames
+scripts/build-demo-gif.sh .webpilot/readme-frames assets/demo.gif
 ```
 
 Tests need a loopback service and permission to start Chromium processes. See the [compatibility record](docs/compatibility.md) for results across the five real fixtures and the defect set. For dashboard-specific verification, see [live dashboard acceptance](docs/dashboard-acceptance.md), [workspace UI acceptance](docs/workspace-ui-acceptance.md), [visual refresh acceptance](docs/dashboard-visual-refresh.md), [pre-test coverage and acceptance](docs/pretest-coverage-acceptance.md), [run management acceptance](docs/run-management-acceptance.md), and [run title acceptance](docs/run-title-acceptance.md).
