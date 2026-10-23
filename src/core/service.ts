@@ -31,6 +31,7 @@ export class WebPilotService {
   async prepare(input:unknown){const target=await inspectProject(input);return {runtime:await doctor({dataDir:this.dataDir}),...target};}
   async open(input:unknown,options:RunOptions & {role?:string;title?:string}={}){
     if(options.coverage)return this.planned.open(input,{...options,title:options.title===undefined?undefined:TitleSchema.parse(options.title),coverage:options.coverage});
+    if(!options.exploratory)throw new PilotError('COVERAGE_REQUIRED','Create and adopt a coverage inventory with coverage_create before opening a browser; pass exploratory:true only for an explicitly exploratory check');
     const initial=TargetSchema.parse(input);
     const taskTitle=options.title===undefined?undefined:TitleSchema.parse(options.title);
     const bindings=BindingsSchema.parse(options.bindings??{});const redactor=new Redactor(bindings);
@@ -126,7 +127,7 @@ export const ToolInputs={
   project_inspect:z.object({target:z.unknown()}).strict(),
   context_collect:z.object({projectPath:z.string().optional(),requirements:z.array(z.string()).optional(),diffRef:z.string().optional()}).strict(),
   run_prepare:z.object({target:z.unknown()}).strict(),
-  session_open:z.object({target:z.unknown(),coverage:CoverageRefSchema.optional(),title:TitleSchema.optional(),bindings:BindingsSchema.default({}),role:z.string().optional(),headful:z.boolean().default(false),dashboard:z.boolean().optional()}).strict(),
+  session_open:z.object({target:z.unknown(),coverage:CoverageRefSchema.optional(),exploratory:z.boolean().default(false),title:TitleSchema.optional(),bindings:BindingsSchema.default({}),role:z.string().optional(),headful:z.boolean().default(false),dashboard:z.boolean().optional()}).strict(),
   session_observe:z.object({sessionId:z.string()}).strict(),
   session_act:z.object({sessionId:z.string(),step:StepSchema,caseId:CoverageRefSchema.shape.id.optional(),revision:CoverageRefSchema.shape.revision.optional(),attempt:CoverageRefSchema.shape.revision.optional()}).strict(),
   session_check:z.object({sessionId:z.string(),step:StepSchema,caseId:CoverageRefSchema.shape.id.optional(),revision:CoverageRefSchema.shape.revision.optional(),attempt:CoverageRefSchema.shape.revision.optional()}).strict(),
@@ -155,7 +156,7 @@ export async function dispatch(service:WebPilotService,name:string,input:unknown
     case 'project_inspect':return inspectProject(args.target);
     case 'context_collect':return collectContext(args);
     case 'run_prepare':return service.prepare(args.target);
-    case 'session_open':return service.open(args.target,{title:args.title,coverage:args.coverage,bindings:args.bindings,role:args.role,headful:args.headful,dashboard:args.dashboard,signal});
+    case 'session_open':return service.open(args.target,{title:args.title,coverage:args.coverage,exploratory:args.exploratory,bindings:args.bindings,role:args.role,headful:args.headful,dashboard:args.dashboard,signal});
     case 'session_observe':return service.observe(args.sessionId);
     case 'session_act':return service.step(args.sessionId,args.step,false,signal,args);
     case 'session_check':return service.step(args.sessionId,args.step,true,signal,args);

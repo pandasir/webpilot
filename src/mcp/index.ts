@@ -21,7 +21,7 @@ const descriptions:Record<string,string>={
   project_inspect:'Inspect a project or URL without starting commands; show ambiguous targets and configuration sources.',
   context_collect:'Read requirements, OpenSpec/test documents and optional Git diff as planning context.',
   run_prepare:'Check runtime and inspect target. Actual service preparation happens during session_open or suite_run.',
-  session_open:'Prepare target service and open an isolated Chromium context with a shared session budget. Supply a concise title describing the user-requested verification task so runs can be distinguished in the Dashboard.',
+  session_open:'Prepare target service and open an isolated Chromium context with a shared session budget. Requires an adopted coverage ref; pass exploratory:true only for an explicitly exploratory check without formal acceptance. Supply a concise title describing the user-requested verification task so runs can be distinguished in the Dashboard.',
   session_observe:'Read a fresh redacted accessibility snapshot, URL, title and recent errors.',
   session_act:'Execute one supported browser action with an unambiguous locator.',
   session_check:'Execute one explicit source-aware assertion; inferred expectations must be candidates.',

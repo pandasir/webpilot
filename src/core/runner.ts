@@ -14,7 +14,7 @@ import {coverageFromPlan,verifyCoveragePlan,coverageResult,reconciliationMarkdow
 import {atomicJson} from '../dashboard/files.js';
 import {summarizeAcceptance} from './acceptance.js';
 
-export interface RunOptions{dataDir?:string;bindings?:Bindings;signal?:AbortSignal;headful?:boolean;dashboard?:boolean;dashboardRoot?:string;coverage?:CoverageRef}
+export interface RunOptions{dataDir?:string;bindings?:Bindings;signal?:AbortSignal;headful?:boolean;dashboard?:boolean;dashboardRoot?:string;coverage?:CoverageRef;exploratory?:boolean}
 export function summarize(results:{outcome:Outcome;unstable:boolean}[],cleanupErrors:string[]=[]){
   let outcome:Outcome=results.some(r=>r.outcome==='failed')?'failed':results.some(r=>r.outcome==='blocked')?'blocked':!results.length || results.some(r=>r.outcome==='inconclusive')?'inconclusive':'passed';
   if(cleanupErrors.length && outcome==='passed')outcome='inconclusive';

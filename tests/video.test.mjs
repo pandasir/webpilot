@@ -92,7 +92,7 @@ test('unavailable recording runtime does not block formal assertions',async t=>{
 test('incremental session close exposes paths only and exports carry no existing recordings',async()=>{
   const f=await fixture();const service=new WebPilotService(f.dataDir);
   try{
-    const open=await service.open({url:f.url});await service.step(open.sessionId,{id:'title',op:'expectText',locator:selector('h1'),expected:'Test frontend',source},true);
+    const open=await service.open({url:f.url},{exploratory:true});await service.step(open.sessionId,{id:'title',op:'expectText',locator:selector('h1'),expected:'Test frontend',source},true);
     const closed=await dispatch(service,'session_close',{sessionId:open.sessionId});await assertVideo(closed.recordings[0]);
     const session=JSON.parse(await readFile(join(service.store.runDir(open.runId),'session.json'),'utf8'));assert.equal(session.recordings[0].path,closed.recordings[0].path);
     assert.ok((await readFile(closed.playbackPath,'utf8')).includes('<video controls'));

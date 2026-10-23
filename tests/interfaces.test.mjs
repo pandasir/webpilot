@@ -51,7 +51,7 @@ test('MCP stdio schema, structured errors, suite and CLI replay agree without mo
 test('incremental sessions persist evidence, share budgets, isolate roles and expire on cancellation',async()=>{
   const f=await fixture();const s=new WebPilotService(f.dataDir);
   try{
-    const opened=await s.open({url:f.url,budget:{maxSteps:1}});
+    const opened=await s.open({url:f.url,budget:{maxSteps:1}},{exploratory:true});
     assert.ok((await s.observe(opened.sessionId)).snapshot.includes('Test frontend'));
     const a=await s.step(opened.sessionId,{id:'title',op:'expectText',locator:selector('h1'),expected:'Test frontend',source},true);
     assert.equal(a.outcome,'passed');assert.ok(a.evidence.some(e=>e.type==='snapshot'));
@@ -59,10 +59,10 @@ test('incremental sessions persist evidence, share budgets, isolate roles and ex
     const persisted=JSON.parse(await readFile(join(s.store.runDir(opened.runId),'session.json'),'utf8'));assert.equal(persisted.steps.length,2);
     await s.close(opened.sessionId);await assert.rejects(()=>s.observe(opened.sessionId),e=>e.code==='SESSION_EXPIRED');
     await assert.rejects(()=>dispatch(s,'constructor',{}),e=>e.code==='UNKNOWN_TOOL');
-    await assert.rejects(()=>s.open({url:f.url},{role:'constructor'}),e=>e.code==='ROLE_MISSING');
-    const controller=new AbortController();const cancel=await s.open({url:f.url},{signal:controller.signal});controller.abort();
+    await assert.rejects(()=>s.open({url:f.url},{role:'constructor',exploratory:true}),e=>e.code==='ROLE_MISSING');
+    const controller=new AbortController();const cancel=await s.open({url:f.url},{signal:controller.signal,exploratory:true});controller.abort();
     await new Promise(r=>setTimeout(r,100));await assert.rejects(()=>s.observe(cancel.sessionId),e=>e.code==='SESSION_EXPIRED');
-    const active=await s.open({url:f.url,budget:{assertionMs:3000}});const stop=new AbortController();
+    const active=await s.open({url:f.url,budget:{assertionMs:3000}},{exploratory:true});const stop=new AbortController();
     setTimeout(()=>stop.abort(),150);
     const result=await dispatch(s,'session_check',{sessionId:active.sessionId,step:{id:'cancel',op:'expectText',locator:selector('h1'),expected:'never',source}},stop.signal);
     assert.equal(result.outcome,'inconclusive');assert.ok(result.evidence.some(e=>e.type==='omitted'));await assert.rejects(()=>s.observe(active.sessionId),e=>e.code==='SESSION_EXPIRED');

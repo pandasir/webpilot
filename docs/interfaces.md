@@ -10,7 +10,7 @@ MCP 使用本地 stdio；成功返回 `{apiVersion:1,data:...}`，失败返回 `
 | runtime_info / runtime_doctor | `{}` | 版本 / Node、浏览器、存储就绪情况 |
 | project_inspect / run_prepare | `{target}` | 有效目标、配置来源、候选及缺口；不执行启动命令 |
 | context_collect | `{projectPath?,requirements?:string[],diffRef?}` | 需求、文档和 Git 上下文；代码影响需另行核实 |
-| session_open | `{target,title?,bindings?:{},role?,headful?:false}` | `sessionId,runId,viewport`；启动必要服务并创建独立 context |
+| session_open | `{target,coverage?,exploratory?:false,title?,bindings?:{},role?,headful?:false}` | `sessionId,runId,viewport`；启动必要服务并创建独立 context；不传 coverage 时必须显式 exploratory:true |
 | session_observe | `{sessionId}` | 脱敏 URL、标题、快照、近期错误 |
 | session_act / session_check | `{sessionId,step}` | 步骤结果与证据；动作 / 断言必须调用对应工具 |
 | session_close | `{sessionId}` | 关闭状态、清理错误、已定稿录像 `recordings` 和本地播放器 `playbackPath` |
@@ -135,7 +135,7 @@ node dist/cli/index.js prune --days 7
 | session_case_end | `{sessionId}` | 结束用例，检查完整步骤、采集录像并清理数据 |
 | session_case_sync | `{sessionId,coverage:{id,revision}}` | 同步已采用的新版本，可细化未执行定位；拒绝改变已执行步骤 |
 
-`suite_run` 可传 `{coverage:{id,revision},plan?,bindings?,headful?}`，不传 plan 时使用清单内已选用例；提供 plan 时必须与采用版本一致。`session_open` 可传 coverage；`session_act/check` 需附带 `caseId,revision,attempt`，步骤必须与已采用用例的顺序及内容一致。旧增量调用不传 coverage 时仍属探索，不能产生正式覆盖验收通过。
+`suite_run` 可传 `{coverage:{id,revision},plan?,bindings?,headful?}`，不传 plan 时使用清单内已选用例；提供 plan 时必须与采用版本一致（不传 coverage 时由已有结构化计划确定性派生清单并自动采用）。`session_open` 可传 coverage；不传 coverage 且未显式传 `exploratory:true` 时拒绝执行（`COVERAGE_REQUIRED`），防止跳过覆盖规划直接执行；`session_act/check` 需附带 `caseId,revision,attempt`，步骤必须与已采用用例的顺序及内容一致。显式探索会话（`exploratory:true`）不产生正式覆盖验收通过。
 
 `coverage_create/read/update/adopt`、`session_open` 和 `suite_run` 接受可选 `dashboard:false`，用于用户明确禁用测试中心集成。规划调用不会登记链接；执行调用不会启动或接入测试中心；这样打开的会话在后续用例及关闭调用中也不返回看板链接。仅关闭自动开页仍使用 `dashboard_open {open:false}`，不影响集成。
 

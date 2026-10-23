@@ -36,9 +36,9 @@ test('task names remain stable, target defaults resolve and legacy records retai
 
 test('session_open persists the redacted task title and omitted title stays backward compatible',async()=>{
  const f=await fixture(),service=new WebPilotService(f.dataDir);try{
-  const named=await dispatch(service,'session_open',{target:{url:f.url,evidence:{live:false}},title:'验证 secret-value 下载',bindings:{secret:'secret-value'}});const dir=service.store.runDir(named.runId);const live=JSON.parse(await readFile(join(dir,'live.json'),'utf8'));assert.equal(live.title,'验证 [REDACTED] 下载');assert.equal(live.titleSource,'task');await service.close(named.sessionId);assert.equal(JSON.parse(await readFile(join(dir,'session.json'),'utf8')).title,live.title);
-  const auto=await dispatch(service,'session_open',{target:{url:f.url,evidence:{live:false}}});await service.close(auto.sessionId);assert.equal((await loadRun(service.store.runDir(auto.runId),auto.runId)).meta.title,`${new URL(f.url).host} · 浏览器探索`);
-  await assert.rejects(()=>dispatch(service,'session_open',{target:{url:f.url},title:' '}));
+  const named=await dispatch(service,'session_open',{target:{url:f.url,evidence:{live:false}},exploratory:true,title:'验证 secret-value 下载',bindings:{secret:'secret-value'}});const dir=service.store.runDir(named.runId);const live=JSON.parse(await readFile(join(dir,'live.json'),'utf8'));assert.equal(live.title,'验证 [REDACTED] 下载');assert.equal(live.titleSource,'task');await service.close(named.sessionId);assert.equal(JSON.parse(await readFile(join(dir,'session.json'),'utf8')).title,live.title);
+  const auto=await dispatch(service,'session_open',{target:{url:f.url,evidence:{live:false}},exploratory:true});await service.close(auto.sessionId);assert.equal((await loadRun(service.store.runDir(auto.runId),auto.runId)).meta.title,`${new URL(f.url).host} · 浏览器探索`);
+  await assert.rejects(()=>dispatch(service,'session_open',{target:{url:f.url},exploratory:true,title:' '}));
  }finally{await service.closeAll();await f.close();}
 });
 

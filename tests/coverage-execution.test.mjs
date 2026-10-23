@@ -27,6 +27,14 @@ test('suite persists adopted coverage before data prepare and reconciles blocked
   }finally{await f.close();}
 });
 
+test('session_open refuses to start without an adopted coverage ref unless exploration is explicit',async()=>{
+  const f=await fixture(),service=new WebPilotService(f.dataDir);try{
+    await assert.rejects(()=>dispatch(service,'session_open',{target:{url:f.url,evidence:{live:false}}}),e=>e.code==='COVERAGE_REQUIRED');
+    const opened=await dispatch(service,'session_open',{target:{url:f.url,evidence:{live:false}},exploratory:true});await service.close(opened.sessionId);
+    assert.equal((await loadRun(join(f.dataDir,'runs',opened.runId),opened.runId)).meta.mode,'exploration');
+  }finally{await service.closeAll();await f.close();}
+});
+
 test('planned incremental session links ordered cases and observations to one run',async()=>{
   const f=await fixture(),service=new WebPilotService(f.dataDir);try{
     const p=PlanSchema.parse(plan(f.url,loginSteps(),{target:{evidence:{video:false}}}));p.cases.push({...p.cases[0],id:'title',title:'页面标题',steps:[{id:'heading',op:'expectText',locator:selector('h1'),expected:'Test frontend',source}]});
