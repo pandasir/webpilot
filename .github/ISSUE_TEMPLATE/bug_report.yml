@@ -1,0 +1,127 @@
+name: 🐛 缺陷报告
+description: 验收结果不对、步骤执行失败、报告或看板显示异常等执行层面的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先确认：
+
+        - 已经用 `node dist/cli/index.js doctor` 检查过环境（Node、Chromium、存储）。
+        - 搜索过已有 issue，没有重复。
+        - 报告、截图、录像里的内容已经脱敏；不要贴真实账号、Cookie 或内部数据。
+
+        只想问用法，不用开 issue，直接在 Discussions 或文档里找答案更快。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 一两句话说清哪里不对，不用先解释原因。
+      placeholder: 例如：计划里 3 条用例只跑了 2 条，第 3 条既没有失败也没有跳过，报告里直接消失了。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从发起到出问题的完整过程。用了 MCP 工具或 CLI 的话，把实际调用的命令和参数贴出来。
+      placeholder: |
+        1. 在聊天里说“验收登录页，目标 http://localhost:3000”
+        2. Codex 生成覆盖清单，我确认采用
+        3. 执行到第 2 条用例时……
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+      placeholder: 例如：三条用例都应该出现在报告里，未执行的标为 inconclusive。
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 报错原文、错误码、报告里的 outcome 都贴上来。截图可以直接拖进这个框。
+      placeholder: |
+        报告 outcome: passed，但 cases 里只有 2 条。
+        日志最后一行：...
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 在哪里出的问题
+      options:
+        - 聊天里（MCP 工具调用）
+        - CLI（run / replay / report 等命令）
+        - 本地测试中心看板
+        - 导出的独立 Playwright 测试包
+        - 安装或升级过程
+        - 不确定
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - WSL
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node 版本
+      description: 输出 `node -v` 的结果。
+      placeholder: v22.19.0
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: WebPilot 版本
+      description: 用 `node dist/cli/index.js doctor` 里的版本号，或 `plugin.json` 里的 version。
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: doctor 输出
+      description: 在 WebPilot 源码目录执行 `node dist/cli/index.js doctor`，把完整输出贴进来。路径里有敏感信息可以先替换成占位符。
+      render: shell
+    validations:
+      required: true
+  - type: dropdown
+    id: stack
+    attributes:
+      label: 被测项目技术栈
+      description: 不填也能报，但填了更容易复现。
+      multiple: true
+      options:
+        - React
+        - Vue
+        - Next.js
+        - 静态 HTML
+        - 需要登录的后台系统
+        - 其他 / 不确定
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 报告、计划或证据（可选）
+      description: 计划 JSON、报告 JSON、run id、看板链接都可以。记得脱敏，`.webpilot/` 下的原始 trace 默认不要贴。
+      render: json
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经搜索过现有 issue，没有找到相同问题
+          required: true
+        - label: 贴出的内容已脱敏，不含真实账号、Cookie 或业务数据
+          required: true

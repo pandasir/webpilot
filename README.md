@@ -438,3 +438,7 @@ scripts/build-demo-gif.sh .webpilot/readme-frames assets/demo.gif
 | [本地测试中心](docs/dashboard.md) | 看板配置、访问机制与恢复规则 |
 | [独立导出](docs/export.md) | 导出包结构与 CI 接入 |
 | [兼容记录](docs/compatibility.md) | 已验证平台、样例与已知限制 |
+
+## 反馈与贡献
+
+遇到问题请按 [提 issue 前自查](.github/CONTRIBUTING.md) 的顺序确认环境，再选择对应模板提交。安装、接口和兼容性相关的问题，先看上面表格里的文档通常更快。

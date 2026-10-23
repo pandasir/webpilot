@@ -1,0 +1,37 @@
+name: 📄 文档问题
+description: 文档写错了、过时了、或者跟着做走不通
+title: "[Docs] "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        文档里贴命令和路径最容易被写错，能直接指出是哪一行就最省事。
+  - type: input
+    id: location
+    attributes:
+      label: 哪份文档
+      description: 文件路径或页面链接，能带小节标题更好。
+      placeholder: docs/installation.md → Windows desktop (PowerShell)
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 哪里不对
+      description: 是内容有误、已经过时，还是照做走不通？走不通的话说清在哪一步停下、报了什么。
+      placeholder: |
+        第 24 行让我执行 `node dist/cli/index.js setup`，但仓库里还没 build，dist 目录不存在。
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 建议改成什么（可选）
+      description: 有具体措辞就直接写，愿意的话也可以直接开 PR。
+  - type: checkboxes
+    id: pr
+    attributes:
+      label: 是否愿意提 PR
+      options:
+        - label: 我可以自己改这段文档

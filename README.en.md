@@ -443,6 +443,10 @@ The detailed documentation is currently written in Chinese.
 | [Standalone export](docs/export.md) | Export package structure and CI integration |
 | [Compatibility](docs/compatibility.md) | Validated platforms, fixtures, and known limits |
 
+## Feedback and contributions
+
+If something breaks, follow the [pre-issue checklist](.github/CONTRIBUTING.md) to confirm your environment first, then pick the matching issue template. Installation, interface, and compatibility questions are usually answered faster by the docs listed above.
+
 ## License
 
 [MIT](LICENSE)

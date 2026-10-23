@@ -1,0 +1,72 @@
+name: 🧩 接入问题
+description: 目标项目跑不起来、定位不到元素、登录态或数据准备接不进去
+title: "[Setup] "
+labels: ["setup"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这类问题大多出在目标项目本身：启动命令、端口、登录方式、元素语义。
+        WebPilot 不挑框架，但需要你提供「怎么启动、怎么登录、预期是什么」。
+
+        先把 `node dist/cli/index.js inspect --project /path/to/app` 的输出准备好，它能看到目标解析结果和缺口。
+  - type: textarea
+    id: goal
+    attributes:
+      label: 想测什么
+      description: 页面地址、要验证的业务结果。
+      placeholder: 例如：测本地后台 http://localhost:5173/settings，验证改完昵称后刷新仍然生效。
+    validations:
+      required: true
+  - type: textarea
+    id: target
+    attributes:
+      label: 目标项目信息
+      description: 启动命令、端口、框架、是否需要登录。有 webpilot 配置或 target 配置的片段就贴上来。
+      render: shell
+      placeholder: |
+        框架：Vue 3 + Vite
+        启动：npm run dev（端口 5173）
+        登录：需要账号密码，测试账号在 .env 里
+    validations:
+      required: true
+  - type: textarea
+    id: inspect
+    attributes:
+      label: inspect 输出
+      description: 执行 `node dist/cli/index.js inspect --project /path/to/app`，贴完整输出。
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 具体卡在哪
+      description: 是启动不了、定位不到元素、还是执行到某一步就 blocked？把错误码和原因贴出来。
+      placeholder: |
+        错误码：LOCATOR_NOT_FOUND
+        原因：找不到“保存”按钮，页面上实际是图标按钮，只有 aria-label
+    validations:
+      required: true
+  - type: textarea
+    id: html
+    attributes:
+      label: 相关页面结构（可选）
+      description: 卡住的那个元素的 HTML 片段，去掉业务数据后贴上来。这比描述有用得多。
+      render: html
+  - type: input
+    id: version
+    attributes:
+      label: WebPilot 版本
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已读过[项目接入](https://github.com/pandasir/webpilot/blob/main/docs/project.md)文档
+          required: true
+        - label: 贴出的内容已脱敏，不含真实账号、Cookie 或业务数据
+          required: true

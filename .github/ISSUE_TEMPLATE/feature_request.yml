@@ -1,0 +1,54 @@
+name: ✨ 功能建议
+description: 希望 WebPilot 支持新的断言、场景、宿主或看板能力
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        WebPilot 的取舍标准很明确：本地执行、证据可追溯、不要求目标项目改代码加 test id。
+        提建议时把「你现在的痛点」讲清楚，比直接给方案更有用。
+
+        只支持 Chromium、不碰 Canvas 视觉操作、不做穷尽全站覆盖，这几条是已知的范围外，不用重复提。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的实际问题
+      description: 现在怎么做的、哪一步最费时间或最容易漏。
+      placeholder: 例如：每次验收都要手动把同一批回归用例写进计划里，希望有办法复用上一次的清单。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的用法
+      description: 最好能写成一段你会对 Codex 说的话，或者一条你希望存在的命令。
+      placeholder: |
+        “用上次那个计划的用例重跑一遍，只跑 P0。”
+        或者：webpilot run --plan <id> --only-priority P0
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 试过的替代方案
+      description: 现在有没有凑合的做法？为什么不够用？
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及的部分
+      multiple: true
+      options:
+        - 规划与覆盖清单
+        - 执行与断言能力
+        - 报告、截图与录像
+        - 本地测试中心看板
+        - CLI 与 MCP 接口
+        - 安装、升级与兼容性
+        - 导出测试包
+        - 文档
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息（可选）
+      description: 相关文档链接、同类工具的做法、你的使用频率等。

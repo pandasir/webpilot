@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安装说明
+    url: https://github.com/pandasir/webpilot/blob/main/docs/installation.md
+    about: 装不上、插件不显示、Codex 找不到 WebPilot 时，先按这里的步骤排查。
+  - name: 接口与命令
+    url: https://github.com/pandasir/webpilot/blob/main/docs/interfaces.md
+    about: MCP 工具、CLI 命令和计划 schema 的用法。
+  - name: 兼容记录
+    url: https://github.com/pandasir/webpilot/blob/main/docs/compatibility.md
+    about: 已经验证过的宿主、框架和已知限制。
