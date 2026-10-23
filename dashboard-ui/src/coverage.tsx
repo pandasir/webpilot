@@ -36,4 +36,4 @@ export function PlansPage({id}:{id?:string}){
   </main>;
 }
 
-export function RunCoverage({snapshot,result,cases}:{snapshot?:CoverageSnapshot;result?:Reconciliation;cases?:ReturnType<typeof publicRun>['cases']}){return snapshot?<><p className="coverage-run-links"><a href={`/plans/${snapshot.manifest.id}`}>查看原覆盖计划 →</a><span>本页使用随运行保存的清单快照。</span></p><CoverageInventory manifest={snapshot.manifest} history={snapshot.history} result={result} cases={cases}/></>:<p className="notice">该运行未记录执行前覆盖清单。已有执行结果和证据仍可查看。</p>;}
+export function RunCoverage({snapshot,result,cases}:{snapshot?:CoverageSnapshot;result?:Reconciliation;cases?:ReturnType<typeof publicRun>['cases']}){return snapshot?<><div className="coverage-snapshot"><span>本页使用随运行保存的清单快照。</span><a href={`/plans/${snapshot.manifest.id}`}>查看原覆盖计划 →</a></div><CoverageInventory manifest={snapshot.manifest} history={snapshot.history} result={result} cases={cases}/></>:<p className="notice">该运行未记录执行前覆盖清单。已有执行结果和证据仍可查看。</p>;}
