@@ -39,18 +39,19 @@ export async function startDashboard(options:{root:string;port?:number;defaultDa
   const broadcast=(id:string,data:Buffer)=>{for(const ws of viewers.get(id)??[]){if(ws.readyState!==WebSocket.OPEN)continue;if(ws.bufferedAmount>MAX_BUFFER){ws.close(1013,'Slow viewer');continue;}if(ws.bufferedAmount===0)ws.send(data);}};
   const notify=(id:string,state:LiveRun)=>{
     overviewSeq++;
+    // 同一批订阅者拿到的是同一份 payload，序列化一次即可；详情仅在有人订阅读 run 时才需要
+    const overview=JSON.stringify({id});let detail:string|undefined;
     for(const sub of subscribers){if(sub.id&&sub.id!==id)continue;
       const event=sub.id?'state':'changed',cursor=sub.id?String(state.seq):`${instance}:${overviewSeq}`;
-      const payload=sub.id?publicRun(state):{id};
       if(sub.res.writableLength>256*1024){sub.res.destroy();subscribers.delete(sub);continue;}
-      sub.res.write(`id: ${cursor}\nevent: ${event}\ndata: ${JSON.stringify(payload)}\n\n`);
+      sub.res.write(`id: ${cursor}\nevent: ${event}\ndata: ${sub.id?(detail??=JSON.stringify(publicRun(state))):overview}\n\n`);
     }
   };
   registry.on('changed',notify);
   registry.on('plans.changed',()=>{for(const sub of subscribers)if(!sub.id)sub.res.write('event: plans.changed\ndata: {}\n\n');});
   registry.on('deleted',(id:string,status:string)=>{
-    overviewSeq++;
-    for(const sub of subscribers){if(sub.id&&sub.id!==id)continue;sub.res.write(`event: ${sub.id?'deleted':'changed'}\ndata: ${JSON.stringify({id,status})}\n\n`);if(sub.id&&status==='deleted'){sub.res.end();subscribers.delete(sub);}}
+    overviewSeq++;const gone=JSON.stringify({id,status});
+    for(const sub of subscribers){if(sub.id&&sub.id!==id)continue;sub.res.write(`event: ${sub.id?'deleted':'changed'}\ndata: ${gone}\n\n`);if(sub.id&&status==='deleted'){sub.res.end();subscribers.delete(sub);}}
     for(const response of media.get(id)??[])response.destroy();media.delete(id);
     for(const ws of viewers.get(id)??[])ws.close(1008,'Run deleted');viewers.delete(id);watch(id);
   });
@@ -155,7 +156,8 @@ export async function startDashboard(options:{root:string;port?:number;defaultDa
         }
         const contentType=artifact.type==='video'?'video/webm':artifact.type==='screenshot'?'image/png':'application/json; charset=utf-8';
         res.writeHead(range?206:200,{'Content-Type':contentType,'Accept-Ranges':'bytes','Content-Length':Math.max(0,end-start+1),...(range?{'Content-Range':`bytes ${start}-${end}/${stat.size}`}:{})});
-        const stream=handle.createReadStream({start,end,autoClose:true});stream.on('error',()=>res.destroy());res.on('close',()=>stream.destroy());stream.pipe(res);return;
+        const stream=handle.createReadStream({start,end,autoClose:true});stream.on('error',()=>res.destroy());res.on('close',()=>stream.destroy());// autoClose 的关闭是异步的，测试进程收尾时可能被 GC 抢先，显式关闭句柄
+        stream.on('close',()=>{void handle.close().catch(()=>{});});stream.pipe(res);return;
       }
       if(req.method!=='GET'){json(res,405,{error:'Method not allowed'});return;}
       const asset=path.match(/^\/assets\/([a-zA-Z0-9_.-]+)$/);const file=asset?`assets/${asset[1]}`:'index.html';
