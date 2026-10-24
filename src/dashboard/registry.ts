@@ -1,15 +1,28 @@
 import {CoverageStore} from '../artifacts/coverage.js';
 import {EventEmitter} from 'node:events';
-import {readdir,realpath,lstat} from 'node:fs/promises';
+import {readdir,realpath,lstat,stat} from 'node:fs/promises';
 import {join} from 'node:path';
 import {managementView,deletionState,resumeDeletions,storageForRun,changeManagement,renameRun,type ManageAction,type ManageResult} from '../artifacts/management.js';
 import {Id,type RunMeta} from './protocol.js';
-import {atomicJson,jsonFile,privateDir} from './files.js';
+import {atomicJson,jsonFile,privateDir,ownerAlive} from './files.js';
 import {readRunFile,loadRun,publicRun,type LiveRun} from './projection.js';
+
+const PLANS_POLL_MS=30_000;
+const PROJECTION_FILES=['live.json','events.jsonl','report.json','session.json','coverage.json','title.json','management.json'] as const;
+// A stable stat fingerprint of every file the projection reads, plus the deletion intent;
+// undefined when the run directory itself is gone so removal handling still runs.
+async function runSignature(dir:string,id:string){
+  try{await stat(dir);}catch{return undefined;}
+  const mark=async(path:string)=>{try{const s=await stat(path);return `${s.size}:${s.mtimeMs}`;}catch{return '-';}};
+  const marks:string[]=[];
+  for(const name of PROJECTION_FILES)marks.push(await mark(join(dir,name)));
+  marks.push(await mark(join(storageForRun(dir),'.run-management',`${id}.delete.json`)));
+  return marks.join('|');
+}
 
 export class Registry extends EventEmitter{
   readonly plans=new Map<string,{dataDir:string;record:Awaited<ReturnType<CoverageStore['read']>>}>();
-  readonly runs=new Map<string,{dir:string;state:LiveRun;fingerprint:string;lastSeen:number;checkedAt:number}>();
+  readonly runs=new Map<string,{dir:string;state:LiveRun;fingerprint:string;lastSeen:number;checkedAt:number;signature?:string}>();
   private roots=new Set<string>();
   readonly deleted=new Map<string,string>();
   private locations=new Map<string,string>();
@@ -17,6 +30,7 @@ export class Registry extends EventEmitter{
   private saving:Promise<void>=Promise.resolve();
   private refreshing?:Promise<void>;
   private timer?:ReturnType<typeof setInterval>;
+  private plansCheckedAt=0;
   private closed=false;
   constructor(readonly root:string){super();}
   async start(defaultRoot?:string){
@@ -25,7 +39,7 @@ export class Registry extends EventEmitter{
     try{for(const [id,dir] of await jsonFile(join(this.root,'registry.json')))if(Id.safeParse(id).success&&typeof dir==='string'){this.entries.set(id,dir);this.locations.set(id,storageForRun(dir));}}catch{}
     if(defaultRoot)this.roots.add(defaultRoot);
     for(const root of this.roots)await this.importRoot(root,false);
-    await this.refresh();this.timer=setInterval(()=>void this.refresh(),1000);this.timer.unref();
+    await this.refresh();this.timer=setInterval(()=>void this.poll(),1000);this.timer.unref();
   }
   private save(){
     if(this.closed)return this.saving;
@@ -41,6 +55,7 @@ export class Registry extends EventEmitter{
     await this.refreshPlans();if(persist)await this.save();return count;
   }
   private async refreshPlans(){
+    this.plansCheckedAt=Date.now();
     const found=new Set<string>();let changed=false;
     for(const dataDir of this.roots)for(const record of await new CoverageStore(dataDir).list()){const id=record.manifest.id;const previous=this.plans.get(id);if(previous&&previous.dataDir!==dataDir)continue;found.add(id);if(JSON.stringify(previous?.record)!==JSON.stringify(record)){this.plans.set(id,{dataDir,record});changed=true;}}
     for(const id of this.plans.keys())if(!found.has(id)){this.plans.delete(id);changed=true;}
@@ -65,18 +80,40 @@ export class Registry extends EventEmitter{
     if(this.refreshing)return this.refreshing.then(()=>id?this.refresh(id,connected):undefined);
     this.refreshing=this.doRefresh(id,connected).catch(()=>{}).finally(()=>{this.refreshing=undefined;});return this.refreshing;
   }
-  private async doRefresh(only?:string,connected=false){
-    if(!only)await this.refreshPlans();let removed=false;
+  // The periodic poll short-circuits unchanged runs and throttles plan scans;
+  // explicit refresh() and executor notifications stay authoritative full passes.
+  private poll():Promise<void>{
+    if(this.closed)return Promise.resolve();
+    if(this.refreshing)return this.refreshing;
+    this.refreshing=this.doRefresh(undefined,false,true).catch(()=>{}).finally(()=>{this.refreshing=undefined;});return this.refreshing;
+  }
+  private async doRefresh(only?:string,connected=false,lazy=false){
+    if(!only&&(!lazy||Date.now()-this.plansCheckedAt>=PLANS_POLL_MS))await this.refreshPlans();let removed=false;
     for(const [id,dir] of this.entries){if(only&&id!==only)continue;const old=this.runs.get(id);
-
+      const fresh=connected||!!old&&Date.now()-old.lastSeen<15000;
       try{
+        const signature=await runSignature(dir,id);
+        if(lazy&&old&&signature&&signature===old.signature){
+          if(connected)old.lastSeen=Date.now();
+          // Unchanged files cannot move the projection; only connection state or a dead executor can.
+          if(old.state.lifecycle!=='finished'&&old.state.lifecycle!=='historical'){
+            let moved=false;
+            const connection=fresh?'connected':'disconnected';
+            if(old.state.connection!==connection){old.state.connection=connection;moved=true;}
+            if(!fresh&&old.state.lifecycle!=='interrupted'&&old.state.meta.owner&&await ownerAlive(old.state.meta.owner)===false){
+              old.state.lifecycle='interrupted';old.state.message='执行器已退出，剩余范围未验证。';moved=true;
+              try{old.state.management=await managementView(dir,old.state);}catch{old.state.management={schemaVersion:1,revision:0,keepForever:true,allowed:false,reason:'保存策略不可读取，已保留文件'};}
+            }
+            if(moved){old.fingerprint=JSON.stringify(publicRun(old.state));this.emit('changed',id,old.state);}
+          }
+          continue;
+        }
         const deletion=await deletionState(storageForRun(dir),id);if(deletion){this.deleted.set(id,deletion.status);this.entries.delete(id);this.runs.delete(id);removed=true;this.emit('deleted',id,deletion.status);continue;}
-        if(!only&&old&&old.state.lifecycle==='finished'&&Date.now()-old.checkedAt<30000)continue;
-        const state=await loadRun(dir,id,connected||!!old&&Date.now()-old.lastSeen<15000);
+        const state=await loadRun(dir,id,fresh);
         try{state.management=await managementView(dir,state);}catch{state.management={schemaVersion:1,revision:0,keepForever:true,allowed:false,reason:'保存策略不可读取，已保留文件'};}
         const removedDuringRead=await deletionState(storageForRun(dir),id);if(removedDuringRead){this.deleted.set(id,removedDuringRead.status);this.entries.delete(id);this.runs.delete(id);removed=true;this.emit('deleted',id,removedDuringRead.status);continue;}
         const fingerprint=JSON.stringify(publicRun(state));const changed=old?.fingerprint!==fingerprint;
-        this.runs.set(id,{dir,state,fingerprint,lastSeen:connected?Date.now():old?.lastSeen??0,checkedAt:Date.now()});
+        this.runs.set(id,{dir,state,fingerprint,lastSeen:connected?Date.now():old?.lastSeen??0,checkedAt:Date.now(),signature});
         if(changed)this.emit('changed',id,state);
       }catch{
         try{await lstat(dir);}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT'){this.entries.delete(id);this.runs.delete(id);removed=true;if(old){old.state.message='运行产物已过期。';this.emit('changed',id,old.state);}continue;}}
