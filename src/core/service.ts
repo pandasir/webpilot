@@ -64,7 +64,8 @@ export class WebPilotService {
   private async persist(live:Pick<LiveSession,'session'|'runId'|'steps'|'closed'|'progress'>){
     const {session,runId,steps}=live;
     await writeFile(join(this.store.runDir(runId),'session.json'),JSON.stringify(session.redactor.object({schemaVersion:1,sessionId:session.id,runId,title:live.progress.meta.title,titleSource:live.progress.meta.titleSource,steps,recordings:session.recordings,closed:live.closed??false,...(live.closed?{finishedAt:new Date().toISOString()}: {})}),null,2)+'\n',{mode:0o600});
-    if(session.target.evidence.video)await writeFile(join(this.store.runDir(runId),'recordings.html'),recordingPlayer(`WebPilot 流程录像：${runId}`,this.store.runDir(runId),[{title:live.progress.meta.title,recordings:session.redactor.object(session.recordings)}]),{mode:0o600});
+    // 录像清单只在打开失败或关闭时才确定；探索过程中它是静态的，逐步重写播放页是纯浪费
+    if(session.target.evidence.video&&((live.closed??false)||session.recordings.length))await writeFile(join(this.store.runDir(runId),'recordings.html'),recordingPlayer(`WebPilot 流程录像：${runId}`,this.store.runDir(runId),[{title:live.progress.meta.title,recordings:session.redactor.object(session.recordings)}]),{mode:0o600});
   }
   private live(id:string){const live=this.sessions.get(id);if(!live)throw new PilotError('SESSION_EXPIRED','Session unavailable or expired');return live;}
   async observe(id:string){if(this.planned.has(id))return this.planned.observe(id);const live=this.live(id);return live.session.observe();}

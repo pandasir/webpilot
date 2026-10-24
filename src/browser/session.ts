@@ -122,7 +122,8 @@ export class BrowserSession {
     }
   }
   async screenshot() {
-    this.check();await this.collectMaskValues();
+    this.check();
+    // 像素遮蔽只依赖配置选择器与运行时绑定值；动态采集的脱敏值已由紧邻的 observe() 收集，无需再遍历全部框架
     const masks:Locator[]=[];
     for(const selector of configuredMasks(this.target)){
       let count=0;
