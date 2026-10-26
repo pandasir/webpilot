@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: 提问、想法与踩坑记录（Discussions）
+    url: https://github.com/pandasir/webpilot/discussions
+    about: 用法问题、想要的能力、看板截图和接入配置都发这里，不用开 issue。安装相关的问题在 Q&A 分类里问最快。
   - name: 安装说明
     url: https://github.com/pandasir/webpilot/blob/main/docs/installation.md
     about: 装不上、插件不显示、Codex 找不到 WebPilot 时，先按这里的步骤排查。

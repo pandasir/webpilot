@@ -1,5 +1,7 @@
 # WebPilot
 
+[![Discussions](https://img.shields.io/badge/GitHub-Discussions-2ea44f?logo=github&logoColor=white)](https://github.com/pandasir/webpilot/discussions)
+
 WebPilot 是 Codex 的本地 Web UI 验收与回归插件。只要项目能在浏览器里打开就能接进来测：React、Vue、Next.js、静态 HTML，甚至不知道用什么框架的站点，都可以直接用 URL 跑。目标项目不用装测试依赖，也不用加 test id。
 
 Codex 读需求、规划步骤、分析失败原因；本机执行器负责真实 Chromium 操作、断言和证据留存，用例一旦保存就不再修改。回归用例可以在 CLI 里不接模型重跑，也能导出成独立的 Playwright 测试包。
@@ -441,4 +443,6 @@ scripts/build-demo-gif.sh .webpilot/readme-frames assets/demo.gif
 
 ## 反馈与贡献
 
-遇到问题请按 [提 issue 前自查](.github/CONTRIBUTING.md) 的顺序确认环境，再选择对应模板提交。安装、接口和兼容性相关的问题，先看上面表格里的文档通常更快。
+用法问题、想法建议、踩坑记录发到 [Discussions](https://github.com/pandasir/webpilot/discussions)，不用开 issue。装不上、跑不起来、报告看不懂这类问题，在 Q&A 分类里问最合适；看板截图、接入配置、导出到 CI 的做法可以发 Show and tell，方便别人直接抄。
+
+确认为缺陷、想加能力，或文档写错了，按 [提 issue 前自查](.github/CONTRIBUTING.md) 的顺序确认环境后，再选择对应模板提交。安装、接口和兼容性相关的问题，先看上面表格里的文档通常更快。
