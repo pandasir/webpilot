@@ -1,6 +1,6 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "webpilot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Verify any accessible Web frontend and save model-free browser regressions"
 }

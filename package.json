@@ -1,6 +1,6 @@
 {
   "name": "webpilot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Framework-independent browser acceptance and model-free regression for Codex",
   "license": "MIT",
   "private": true,
