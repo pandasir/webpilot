@@ -57,9 +57,14 @@ export class WebPilotService {
       this.sessions.set(session.id,{session,service,runId,controller,timer,busy:false,steps:[],progress});
       const id=session.id;signal.addEventListener('abort',()=>{void this.close(id).catch(()=>{});},{once:true});
       return {sessionId:id,runId,viewport:service.target.viewport};
-    }catch(error){clearTimeout(timer);await session?.close().catch(()=>{});
-      if(session)await this.persist({session,runId,steps:[],progress});
-      await service?.close();await progress.finish({reason:redactor.text(errorInfo(error).message)});throw error;}
+    }catch(error){
+      clearTimeout(timer);const errors=[errorInfo(error).message];
+      try{await session?.close();}catch(cleanupError){errors.push(errorInfo(cleanupError).message);}
+      try{if(session)await this.persist({session,runId,steps:[],progress});}catch(persistError){errors.push(errorInfo(persistError).message);}
+      try{await service?.close();}catch(cleanupError){errors.push(errorInfo(cleanupError).message);}
+      try{await progress.finish({reason:redactor.text(errors.join('; '))});}catch{}
+      throw error;
+    }
   }
   private async persist(live:Pick<LiveSession,'session'|'runId'|'steps'|'closed'|'progress'>){
     const {session,runId,steps}=live;
@@ -98,14 +103,17 @@ export class WebPilotService {
   private async finishClose(id:string){
     const live=this.live(id);this.sessions.delete(id);clearTimeout(live.timer);
     if(live.busy)live.controller.abort();await live.idle;live.closed=true;
-    await live.progress.phase('cleaning','关闭浏览器并定稿录像');await live.progress.detachBrowser();
     const errors:string[]=[];
-    try{const trace=live.session.target.evidence.rawTrace?join(this.store.runDir(live.runId),'sensitive-trace.zip'):undefined;await live.session.close(trace);if(trace)await chmod(trace,0o600);}catch(error){errors.push(errorInfo(error).message);}
-    await this.persist(live);
-    live.controller.abort();
-    try{await live.service.close();}catch(error){errors.push(errorInfo(error).message);}
-    await live.progress.emit('recording.available',{recordings:live.session.recordings},{caseId:'exploration',attempt:1});
-    await live.progress.finish({reason:errors.length?live.session.redactor.text(errors.join('; ')):undefined});
+    try{
+      try{await live.progress.phase('cleaning','关闭浏览器并定稿录像');await live.progress.detachBrowser();}catch(error){errors.push(errorInfo(error).message);}
+      try{const trace=live.session.target.evidence.rawTrace?join(this.store.runDir(live.runId),'sensitive-trace.zip'):undefined;await live.session.close(trace);if(trace)await chmod(trace,0o600);}catch(error){errors.push(errorInfo(error).message);}
+      try{await this.persist(live);}catch(error){errors.push(errorInfo(error).message);throw error;}
+    }finally{
+      live.controller.abort();
+      try{await live.service.close();}catch(error){errors.push(errorInfo(error).message);}
+      try{await live.progress.emit('recording.available',{recordings:live.session.recordings},{caseId:'exploration',attempt:1});}catch(error){errors.push(errorInfo(error).message);}
+      try{await live.progress.finish({reason:errors.length?live.session.redactor.text(errors.join('; ')):undefined});}catch(error){errors.push(errorInfo(error).message);}
+    }
     return {sessionId:id,runId:live.runId,closed:true,cleanupErrors:live.session.redactor.object(errors),recordings:live.session.redactor.object(live.session.recordings),...(live.session.target.evidence.video?{playbackPath:join(this.store.runDir(live.runId),'recordings.html')}: {})};
   }
   async closeAll(){await this.planned.closeAll();for(const id of [...this.sessions.keys()])await this.close(id).catch(()=>{});}

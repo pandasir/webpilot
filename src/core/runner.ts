@@ -127,7 +127,13 @@ export async function saveCase(input:unknown,target:Plan['target'],options:RunOp
   const c=CaseSchema.parse(input);assertPortable(c,options.bindings ?? {});
   const store=new Store(options.dataDir);let verifiedBy:string|undefined;
   let previous:Case|undefined;
-  if(c.version>1){try{previous=await store.readCase(c.id,c.version-1);}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}}
+  if(c.version>1){
+    try{previous=await store.readCase(c.id,c.version-1);}
+    catch(error){
+      if((error as NodeJS.ErrnoException).code==='ENOENT')throw new PilotError('PREVIOUS_VERSION_MISSING',`Save case version ${c.version-1} before version ${c.version}; case versions must be consecutive`);
+      throw error;
+    }
+  }
   const difference=previous?caseDifference(previous,c):undefined;
   if(previous && !c.change)throw new PilotError('CHANGE_REASON_MISSING','New versions require a visible change reason');
   if(difference?.assertionsChanged && (!c.change?.adoptedBy || !c.change.source || c.change.source.type==='inferred')) {

@@ -30,7 +30,7 @@ async function measure(watched,trial){
         });}
       };
     });
-    const {token}=await internal({url:service.url,token:service.token},'/internal/bootstrap',{});await page.goto(`${service.url}/#access=${token}`);await page.getByRole('heading',{name:'每一次测试，都有迹可循。'}).waitFor();
+    const {token}=await internal({url:service.url,token:service.token},'/internal/bootstrap',{});await page.goto(`${service.url}/#access=${token}`);await page.getByRole('region',{name:'测试运行',exact:true}).waitFor({timeout:10000});
     for(const dataDir of roots){const client=new Client({name:'dashboard-benchmark',version:'1'});await client.connect(new StdioClientTransport({command:process.execPath,args:['dist/mcp/index.js'],env:{...process.env,WEBPILOT_DATA_DIR:dataDir,WEBPILOT_DASHBOARD_DIR:state,WEBPILOT_DASHBOARD:'1'},stderr:'pipe'}));clients.push(client);}
     const rss=process.memoryUsage().rss;let peak=rss;timer=setInterval(()=>{peak=Math.max(peak,process.memoryUsage().rss);},50);const cpu=process.cpuUsage(),started=performance.now();
     const input=plan(target.url+'/?delay=2500',[{id:'wait',op:'expectText',locator:selector('#delay'),expected:'Ready',source},...loginSteps()],{budget:{assertionMs:10000,totalMs:20000}});
