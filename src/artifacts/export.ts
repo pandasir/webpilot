@@ -1,13 +1,16 @@
 import {access,mkdir,writeFile,readFile,cp} from 'node:fs/promises';
 import {dirname,join,resolve} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {spawn} from 'node:child_process';
 import {PlanSchema,HttpUrlSchema,BindingsSchema,VERSION,type Bindings} from '../core/schema.js';
 import {assertPortable} from './redaction.js';
 import {PilotError} from '../core/errors.js';
+import {resolvePlan} from '../project/target.js';
+import {assertVersionSnapshot,readBuildVersion} from '../core/version.js';
 
 export async function exportPlan(input:unknown,output:string,bindings:Bindings={}){
-  const plan=PlanSchema.parse(input);BindingsSchema.parse(bindings);assertPortable(plan,bindings);
+  assertVersionSnapshot();
+  const plan=await resolvePlan(input);BindingsSchema.parse(bindings);assertPortable(plan,bindings);
   const destination=resolve(output);
   try{await access(destination);throw new PilotError('EXPORT_EXISTS','Output directory already exists; choose a new directory');}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;}
   await mkdir(destination,{recursive:true,mode:0o700});
@@ -17,9 +20,11 @@ export async function exportPlan(input:unknown,output:string,bindings:Bindings={
   // Independent packages never start a Dashboard or require its ws/React runtime.
   await mkdir(join(destination,'runtime','dashboard'),{recursive:true});
   for(const file of ['protocol.js','files.js','projection.js'])await cp(join(builtRoot,'dashboard',file),join(destination,'runtime','dashboard',file));
+  if(readBuildVersion(pathToFileURL(join(destination,'runtime','core','release.json')))!==VERSION)throw new PilotError('VERSION_MISMATCH','Copied executor version differs from the exporting executor; rebuild and export again');
   const {url,projectPath,configPath,application,command,staticDir,data,...portableTarget}=plan.target;
   const externalData=!!(data.prepare || data.cleanup);
-  const portablePlan={...plan,target:{...portableTarget,evidence:{...portableTarget.evidence,rawTrace:false,live:false}}};
+  const portablePlan={...plan,target:{...portableTarget,evidence:{...portableTarget.evidence,rawTrace:false,live:false}},
+    targetResolution:{schemaVersion:1,sources:Object.fromEntries(Object.keys(portableTarget).map(key=>[key,key==='evidence'?'export-policy':plan.targetResolution!.sources[key]??'saved']))}};
   const references=new Set<string>();
   function refs(item:unknown){if(!item || typeof item!=='object')return;if(Array.isArray(item)){item.forEach(refs);return;}for(const [key,value] of Object.entries(item)){if((key==='ref' || key==='storageStateRef') && typeof value==='string')references.add(value);else refs(value);}}
   refs(portablePlan);
@@ -32,6 +37,7 @@ export async function exportPlan(input:unknown,output:string,bindings:Bindings={
   await writeFile(join(destination,'webpilot.spec.mjs'),`import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { runPlan } from './runtime/core/runner.js';
+import { overridePlan } from './runtime/project/target.js';
 const plan=JSON.parse(await readFile(new URL('./plan.json',import.meta.url),'utf8'));
 const manifest=JSON.parse(await readFile(new URL('./manifest.json',import.meta.url),'utf8'));
 test(plan.id+': acceptance suite',async({},info)=>{
@@ -40,7 +46,8 @@ test(plan.id+': acceptance suite',async({},info)=>{
   if(manifest.requiresPrepare && !overrides.data?.prepare) throw new Error('Blocked: equivalent data preparation is required');
   if(manifest.requiresCleanup && !overrides.data?.cleanup) throw new Error('Blocked: equivalent data cleanup is required');
   const bindings=process.env.WEBPILOT_BINDINGS_FILE?JSON.parse(await readFile(process.env.WEBPILOT_BINDINGS_FILE,'utf8')):{};
-  const run=await runPlan({...plan,target:{...plan.target,...overrides,url:process.env.BASE_URL}},{dataDir:info.outputPath('webpilot-data'),bindings,dashboard:false});
+  const effective=await overridePlan(plan,{...overrides,url:process.env.BASE_URL});
+  const run=await runPlan(effective,{dataDir:info.outputPath('webpilot-data'),bindings,dashboard:false});
   await info.attach('acceptance-result',{body:JSON.stringify(run,null,2),contentType:'application/json'});
   info.annotations.push({type:'acceptance-status',description:run.outcome+(run.unstable?' (unstable)':'')});
   expect(run.exitCode,JSON.stringify(run.cases)).toBe(0);

@@ -2,7 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import {chmod,writeFile} from 'node:fs/promises';
 import {z} from 'zod';
-import {BindingsSchema,HttpUrlSchema,StepSchema,TargetSchema,isAssertion,type Plan,type StepResult} from './schema.js';
+import {BindingsSchema,HttpUrlSchema,StepSchema,TargetSchema,TargetResolutionSchema,VERSION,isAssertion,type Plan,type StepResult} from './schema.js';
 import {Budget} from './budget.js';
 import {capture,runPlan,saveCase,type RunOptions} from './runner.js';
 import {PilotError,errorInfo} from './errors.js';
@@ -19,6 +19,7 @@ import {TitleSchema,explorationTitle} from './titles.js';
 import {CoverageStore} from '../artifacts/coverage.js';
 import {CoverageDraftSchema,CoverageRefSchema,coveragePlan} from './coverage.js';
 import {PlannedSessions} from './planned-session.js';
+import {resolveTarget,requireReady} from '../project/target.js';
 
 interface LiveSession {session:BrowserSession;service:Awaited<ReturnType<typeof prepareService>>;runId:string;controller:AbortController;timer:ReturnType<typeof setTimeout>;busy:boolean;steps:StepResult[];progress:Progress;closed?:boolean;idle?:Promise<void>;idleResolve?:()=>void}
 export class WebPilotService {
@@ -32,7 +33,7 @@ export class WebPilotService {
   async open(input:unknown,options:RunOptions & {role?:string;title?:string}={}){
     if(options.coverage)return this.planned.open(input,{...options,title:options.title===undefined?undefined:TitleSchema.parse(options.title),coverage:options.coverage});
     if(!options.exploratory)throw new PilotError('COVERAGE_REQUIRED','Create and adopt a coverage inventory with coverage_create before opening a browser; pass exploratory:true only for an explicitly exploratory check');
-    const initial=TargetSchema.parse(input);
+    const inspection=await resolveTarget(input);requireReady(inspection);const initial=inspection.target;
     const taskTitle=options.title===undefined?undefined:TitleSchema.parse(options.title);
     const bindings=BindingsSchema.parse(options.bindings??{});const redactor=new Redactor(bindings);
     const controller=new AbortController();
@@ -44,7 +45,7 @@ export class WebPilotService {
     const progress=await Progress.create(this.store.runDir(runId),this.store.root,{id:runId,title:taskTitle??explorationTitle(initial),titleSource:taskTitle?'task':'target',mode:'exploration',target:initial.url??'准备目标中',project:initial.projectPath,startedAt:new Date().toISOString(),cases:[],live:initial.evidence.live},redactor,options);
     try{
       await progress.phase('preparing','检查项目与准备浏览器');
-      const inspection=await inspectProject(input);await progress.target(inspection.target);
+      await progress.target(inspection.target);
       await this.store.configureRun(runId,inspection.target.evidence);
       clearTimeout(timer);timer=setTimeout(()=>controller.abort(),inspection.target.budget.totalMs);
       service=await prepareService(inspection,signal);
@@ -57,9 +58,14 @@ export class WebPilotService {
       this.sessions.set(session.id,{session,service,runId,controller,timer,busy:false,steps:[],progress});
       const id=session.id;signal.addEventListener('abort',()=>{void this.close(id).catch(()=>{});},{once:true});
       return {sessionId:id,runId,viewport:service.target.viewport};
-    }catch(error){clearTimeout(timer);await session?.close().catch(()=>{});
-      if(session)await this.persist({session,runId,steps:[],progress});
-      await service?.close();await progress.finish({reason:redactor.text(errorInfo(error).message)});throw error;}
+    }catch(error){
+      clearTimeout(timer);const errors=[errorInfo(error).message];
+      try{await session?.close();}catch(cleanupError){errors.push(errorInfo(cleanupError).message);}
+      try{if(session)await this.persist({session,runId,steps:[],progress});}catch(persistError){errors.push(errorInfo(persistError).message);}
+      try{await service?.close();}catch(cleanupError){errors.push(errorInfo(cleanupError).message);}
+      try{await progress.finish({reason:redactor.text(errors.join('; '))});}catch{}
+      throw error;
+    }
   }
   private async persist(live:Pick<LiveSession,'session'|'runId'|'steps'|'closed'|'progress'>){
     const {session,runId,steps}=live;
@@ -99,14 +105,17 @@ export class WebPilotService {
   private async finishClose(id:string){
     const live=this.live(id);this.sessions.delete(id);clearTimeout(live.timer);
     if(live.busy)live.controller.abort();await live.idle;live.closed=true;
-    await live.progress.phase('cleaning','关闭浏览器并定稿录像');await live.progress.detachBrowser();
     const errors:string[]=[];
-    try{const trace=live.session.target.evidence.rawTrace?join(this.store.runDir(live.runId),'sensitive-trace.zip'):undefined;await live.session.close(trace);if(trace)await chmod(trace,0o600);}catch(error){errors.push(errorInfo(error).message);}
-    await this.persist(live);
-    live.controller.abort();
-    try{await live.service.close();}catch(error){errors.push(errorInfo(error).message);}
-    await live.progress.emit('recording.available',{recordings:live.session.recordings},{caseId:'exploration',attempt:1});
-    await live.progress.finish({reason:errors.length?live.session.redactor.text(errors.join('; ')):undefined});
+    try{
+      try{await live.progress.phase('cleaning','关闭浏览器并定稿录像');await live.progress.detachBrowser();}catch(error){errors.push(errorInfo(error).message);}
+      try{const trace=live.session.target.evidence.rawTrace?join(this.store.runDir(live.runId),'sensitive-trace.zip'):undefined;await live.session.close(trace);if(trace)await chmod(trace,0o600);}catch(error){errors.push(errorInfo(error).message);}
+      try{await this.persist(live);}catch(error){errors.push(errorInfo(error).message);throw error;}
+    }finally{
+      live.controller.abort();
+      try{await live.service.close();}catch(error){errors.push(errorInfo(error).message);}
+      try{await live.progress.emit('recording.available',{recordings:live.session.recordings},{caseId:'exploration',attempt:1});}catch(error){errors.push(errorInfo(error).message);}
+      try{await live.progress.finish({reason:errors.length?live.session.redactor.text(errors.join('; ')):undefined});}catch(error){errors.push(errorInfo(error).message);}
+    }
     return {sessionId:id,runId:live.runId,closed:true,cleanupErrors:live.session.redactor.object(errors),recordings:live.session.redactor.object(live.session.recordings),...(live.session.target.evidence.video?{playbackPath:join(this.store.runDir(live.runId),'recordings.html')}: {})};
   }
   async closeAll(){await this.planned.closeAll();for(const id of [...this.sessions.keys()])await this.close(id).catch(()=>{});}
@@ -116,9 +125,9 @@ export class WebPilotService {
 
 export const ToolInputs={
   dashboard_open:z.object({open:z.boolean().default(true),force:z.boolean().default(false)}).strict(),
-  coverage_create:z.object({draft:CoverageDraftSchema,bindings:BindingsSchema.default({}),dashboard:z.boolean().optional()}).strict(),
+  coverage_create:z.object({draft:CoverageDraftSchema.innerType().extend({target:TargetSchema.partial()}),bindings:BindingsSchema.default({}),dashboard:z.boolean().optional()}).strict(),
   coverage_read:z.object({id:CoverageRefSchema.shape.id,revision:CoverageRefSchema.shape.revision.optional(),dashboard:z.boolean().optional()}).strict(),
-  coverage_update:z.object({id:CoverageRefSchema.shape.id,expectedRevision:CoverageRefSchema.shape.revision,requestId:CoverageRefSchema.shape.id,draft:CoverageDraftSchema,reason:z.string().min(1),bindings:BindingsSchema.default({}),dashboard:z.boolean().optional()}).strict(),
+  coverage_update:z.object({id:CoverageRefSchema.shape.id,expectedRevision:CoverageRefSchema.shape.revision,requestId:CoverageRefSchema.shape.id,draft:CoverageDraftSchema.innerType().extend({target:TargetSchema.partial()}),reason:z.string().min(1),bindings:BindingsSchema.default({}),dashboard:z.boolean().optional()}).strict(),
   coverage_adopt:z.object({coverage:CoverageRefSchema,reference:z.string().min(1),userConfirmed:z.boolean().default(false),dashboard:z.boolean().optional()}).strict(),
   session_case_begin:z.object({sessionId:z.string(),caseId:CoverageRefSchema.shape.id,coverage:CoverageRefSchema}).strict(),
   session_case_end:z.object({sessionId:z.string()}).strict(),
@@ -135,7 +144,7 @@ export const ToolInputs={
   session_close:z.object({sessionId:z.string()}).strict(),
   suite_run:z.object({plan:z.unknown().optional(),coverage:CoverageRefSchema.optional(),bindings:BindingsSchema.default({}),headful:z.boolean().default(false),dashboard:z.boolean().optional()}).strict(),
   report_read:z.object({runId:z.string()}).strict(),
-  case_save:z.object({case:z.unknown(),target:z.unknown(),bindings:BindingsSchema.default({}),promote:z.boolean().default(false)}).strict(),
+  case_save:z.object({case:z.unknown(),target:z.unknown(),targetResolution:TargetResolutionSchema.optional(),bindings:BindingsSchema.default({}),promote:z.boolean().default(false)}).strict(),
   case_export:z.object({plan:z.unknown(),output:z.string(),bindings:BindingsSchema.default({})}).strict(),
   export_verify:z.object({directory:z.string(),url:HttpUrlSchema,bindingsFile:z.string().optional(),targetConfig:z.string().optional()}).strict(),
 };
@@ -152,7 +161,7 @@ export async function dispatch(service:WebPilotService,name:string,input:unknown
     case 'session_case_begin':return service.planned.begin(args.sessionId,args.caseId,args.coverage);
     case 'session_case_end':return service.planned.end(args.sessionId);
     case 'session_case_sync':return service.planned.sync(args.sessionId,args.coverage);
-    case 'runtime_info':return {apiVersion:1,name:'webpilot',version:'0.1.0'};
+    case 'runtime_info':return {apiVersion:1,name:'webpilot',version:VERSION};
     case 'runtime_doctor':return doctor({dataDir:service.dataDir});
     case 'project_inspect':return inspectProject(args.target);
     case 'context_collect':return collectContext(args);
@@ -164,7 +173,7 @@ export async function dispatch(service:WebPilotService,name:string,input:unknown
     case 'session_close':return service.close(args.sessionId);
     case 'suite_run':return service.run(args.plan??(args.coverage?coveragePlan(await service.coverageStore.snapshot(args.coverage)):undefined),{coverage:args.coverage,bindings:args.bindings,headful:args.headful,dashboard:args.dashboard,signal});
     case 'report_read':return service.store.readRun(args.runId);
-    case 'case_save':return service.save(args.case,args.target,{bindings:args.bindings,promote:args.promote,signal});
+    case 'case_save':return service.save(args.case,args.target,{targetResolution:args.targetResolution,bindings:args.bindings,promote:args.promote,signal});
     case 'case_export':return exportPlan(args.plan,args.output,args.bindings);
     case 'export_verify':return verifyExport(args.directory,{url:args.url,bindingsFile:args.bindingsFile,targetConfig:args.targetConfig,signal});
   }

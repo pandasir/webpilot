@@ -1,5 +1,7 @@
 # WebPilot
 
+[![Discussions](https://img.shields.io/badge/GitHub-Discussions-2ea44f?logo=github&logoColor=white)](https://github.com/pandasir/webpilot/discussions)
+
 WebPilot 是 Codex 的本地 Web UI 验收与回归插件。只要项目能在浏览器里打开就能接进来测：React、Vue、Next.js、静态 HTML，甚至不知道用什么框架的站点，都可以直接用 URL 跑。目标项目不用装测试依赖，也不用加 test id。
 
 Codex 读需求、规划步骤、分析失败原因；本机执行器负责真实 Chromium 操作、断言和证据留存，用例一旦保存就不再修改。回归用例可以在 CLI 里不接模型重跑，也能导出成独立的 Playwright 测试包。
@@ -11,6 +13,7 @@ Codex 读需求、规划步骤、分析失败原因；本机执行器负责真�
 ## 目录
 
 - [安装](#安装)
+  - [快速开始](#快速开始)
   - [让 Codex 自己装（推荐）](#让-codex-自己装推荐)
   - [手动准备环境与插件包](#手动准备环境与插件包)
   - [macOS 注册与安装](#macos-注册与安装)
@@ -35,13 +38,25 @@ Codex 读需求、规划步骤、分析失败原因；本机执行器负责真�
 
 需要 Node.js 22+、npm，以及支持插件的 Codex 桌面版或 CLI。WebPilot 自己要用本机 Node.js 和 Chromium，桌面版自带的 Codex CLI 顶不上 Node.js。
 
-装法有两种：让 Codex 代你装，或者按下面的手动步骤来。两种方式装完，都要退出重开应用并新建聊天，见[安装后检查](#安装后检查)。
+### 快速开始
+
+第一次安装，优先让 Codex 按当前平台的说明代装。已经有 WebPilot 源码目录，或希望自己控制每一步，再走手动安装。
+
+| 当前情况 | 从这里开始 |
+|---|---|
+| 使用 Codex 桌面版，想让 Codex 帮忙安装 | 复制下方的[代装请求](#让-codex-自己装推荐)发送到 Codex 聊天。 |
+| 已经下载 WebPilot 源码，自己安装 | 先完成[环境准备与打包](#手动准备环境与插件包)，再按系统选择 [macOS](#macos-注册与安装) 或 [Windows](#windows-注册与安装) 注册插件。 |
+| 只想确认安装是否完成 | 按[安装后检查](#安装后检查)：确认插件启用，重启 Codex 并在新聊天中找到四个 WebPilot Skill。 |
+
+**安装完成的判断标准：** 插件列表显示 `webpilot@webpilot-local` 为 `installed, enabled`，并且重启 Codex 后新聊天能找到 `webpilot:verify`、`webpilot:replay`、`webpilot:diagnose`、`webpilot:export`。只看到构建成功或插件已安装，还不代表新聊天已加载 Skill。
+
+手动安装需要联网准备 Chromium；Windows 原生环境和 WSL 需要分别准备。遇到宿主差异时，再查看下面的平台步骤和[安装问题排查](#安装问题排查)。
 
 ### 让 Codex 自己装（推荐）
 
 打开 Codex 桌面版聊天，复制发送下面这句话：
 
-> 帮我把 https://github.com/pandasir/webpilot 的 WebPilot 插件安装到当前 Codex 桌面版，按仓库 README 的手动步骤自动适配 macOS 或 Windows，完成安装和检查，并告诉我重启后的验证方法。
+> 帮我把 https://github.com/pandasir/webpilot 的 WebPilot 插件安装到当前 Codex 桌面版。按仓库 README 选择适合当前系统的步骤，完成环境准备、插件安装和安装后检查；如果有步骤必须我手动操作，请指出具体操作。最后告诉我重启 Codex 并在新聊天验证四个 Skill 的方法。
 
 Codex 会替你下载仓库、检查 Node.js 22+ 和 npm、装依赖、构建、准备 Chromium、打包本地市场并安装插件；本地已有仓库就直接用。仓库和生成的本地市场放在固定目录，方便以后更新。
 
@@ -441,4 +456,6 @@ scripts/build-demo-gif.sh .webpilot/readme-frames assets/demo.gif
 
 ## 反馈与贡献
 
-遇到问题请按 [提 issue 前自查](.github/CONTRIBUTING.md) 的顺序确认环境，再选择对应模板提交。安装、接口和兼容性相关的问题，先看上面表格里的文档通常更快。
+用法问题、想法建议、踩坑记录发到 [Discussions](https://github.com/pandasir/webpilot/discussions)，不用开 issue。装不上、跑不起来、报告看不懂这类问题，在 Q&A 分类里问最合适；看板截图、接入配置、导出到 CI 的做法可以发 Show and tell，方便别人直接抄。
+
+确认为缺陷、想加能力，或文档写错了，按 [提 issue 前自查](.github/CONTRIBUTING.md) 的顺序确认环境后，再选择对应模板提交。安装、接口和兼容性相关的问题，先看上面表格里的文档通常更快。

@@ -1,6 +1,6 @@
 {
   "name": "webpilot",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "description": "Framework-independent browser acceptance and model-free regression for Codex",
   "license": "MIT",
   "private": true,
@@ -12,7 +12,9 @@
     "webpilot": "dist/cli/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && vite build --config dashboard-ui/vite.config.mjs",
+    "build": "npm run check:version && tsc -p tsconfig.json && node scripts/release-version.mjs generate && vite build --config dashboard-ui/vite.config.mjs && node scripts/release-version.mjs check --built",
+    "check:version": "node scripts/release-version.mjs check",
+    "version:sync": "node scripts/release-version.mjs sync",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p dashboard-ui/tsconfig.json",
     "test": "npm run build && node --import ./tests/dashboard-env.mjs --test --test-concurrency=1 tests/*.test.mjs",
     "doctor": "node dist/cli/index.js doctor",

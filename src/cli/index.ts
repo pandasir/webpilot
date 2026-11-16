@@ -15,6 +15,8 @@ import {CoverageStore} from '../artifacts/coverage.js';
 import {coverageFromPlan,CoverageRefSchema} from '../core/coverage.js';
 import {PlanSchema} from '../core/schema.js';
 import {dashboardRoot} from '../dashboard/files.js';
+import {overridePlan,adoptedTarget,LEGACY_TARGET_GAP} from '../project/target.js';
+import {coveragePlan} from '../core/coverage.js';
 
 async function main() {
   const command = process.argv[2];
@@ -46,11 +48,19 @@ async function main() {
   if(values.coverage)options.coverage=CoverageRefSchema.parse(await json(values.coverage));
   const showDashboard=async()=>{if(options.dashboard===false||process.env.WEBPILOT_DASHBOARD==='0')return;try{const link=await openDashboard({root:values['dashboard-dir'],auto:!values['no-open'],open:!values['no-open']});console.error(`WebPilot 测试中心：${link.dashboardUrl}`);}catch{console.error('WebPilot：看板暂不可用，继续执行测试。');}};
   const abort=()=>controller.abort();process.once('SIGINT',abort);process.once('SIGTERM',abort);
+  const preparePlan=async(p:any,savedRun=false)=>{
+    const legacyRun=savedRun&&!p.targetResolution;
+    if(options.coverage){const baseline=coveragePlan(await coverageStore.snapshot(options.coverage));const fixed=adoptedTarget(p.target,baseline.target,baseline.targetResolution);p={...p,target:fixed.target,targetResolution:fixed.targetResolution};}
+    const loaded=await overridePlan(p,targetOverrides,{savedRun});
+    if(legacyRun&&!loaded.gaps.includes(LEGACY_TARGET_GAP))loaded.gaps.push(LEGACY_TARGET_GAP);
+    if(loaded.gaps.includes(LEGACY_TARGET_GAP))console.error(`WebPilot：${LEGACY_TARGET_GAP}`);
+    return loaded;
+  };
   const loadPlan=async()=>{
-    if(values.plan){const p=await json(values.plan);return {...p,target:{...p.target,...targetOverrides}};}
-    if(values.run){const p=await json(join(store.runDir(values.run),'plan.json'));return {...p,target:{...p.target,...targetOverrides}};}
+    if(values.plan)return preparePlan(await json(values.plan));
+    if(values.run)return preparePlan(await json(join(store.runDir(values.run),'plan.json')),true);
     const c=values['case-file']?await json(values['case-file']):values.case?await store.readCase(values.case,Number(values.version ?? 1)):undefined;
-    if(c)return {schemaVersion:1,id:`replay-${c.id}`,target:targetOverrides,scope:[c.title],cases:[c]};
+    if(c)return preparePlan({schemaVersion:1,id:`replay-${c.id}`,target:{},scope:[c.title],cases:[c]});
     throw new Error('Provide --plan FILE, --run ID, --case-file FILE or --case ID --version N');
   };
   let result:unknown;
@@ -59,7 +69,7 @@ async function main() {
       case 'inspect':result=await inspectProject(targetOverrides);break;
       case 'context':result=await collectContext({projectPath:values.project,requirements:values.requirements?[values.requirements]:[],diffRef:values['diff-ref']});break;
       case 'run':case 'replay':{const plan=await loadPlan();if(values['preview-only']){await showDashboard();result=await coverageStore.create(coverageFromPlan(PlanSchema.parse(plan),'generate-only'),bindings);if(options.dashboard!==false&&process.env.WEBPILOT_DASHBOARD!=='0'){const endpoint=await endpointAt(values['dashboard-dir']);if(endpoint)try{await requireCoverageDashboard(endpoint);await internal(endpoint,'/internal/import',{dataDir:store.root});console.error(`WebPilot 覆盖计划：${endpoint.url}/plans/${(result as any).manifest.id}`);}catch(error){console.error(`WebPilot：${(error as Error).message}`);}}break;}await showDashboard();const run=await runPlan(plan,options);result=run;process.exitCode=run.exitCode;break;}
-      case 'save':{const p=await loadPlan();const c=values.case?p.cases.find((c:{id:string})=>c.id===values.case):p.cases[0];if(!c)throw new Error('Selected case is unavailable');if(values.promote)await showDashboard();result=await saveCase(c,p.target,{...options,promote:values.promote});break;}
+      case 'save':{const p=await loadPlan();const c=values.case?p.cases.find((c:{id:string})=>c.id===values.case):p.cases[0];if(!c)throw new Error('Selected case is unavailable');if(values.promote)await showDashboard();result=await saveCase(c,p.target,{...options,targetResolution:p.targetResolution,promote:values.promote});break;}
       case 'report':if(!values.run)throw new Error('--run ID is required');result=await store.readRun(values.run);break;
       case 'export':if(!values.out)throw new Error('--out DIRECTORY is required');result=await exportPlan(await loadPlan(),values.out,bindings);break;
       case 'export-verify':if(!values.directory || !values.url)throw new Error('--directory and --url are required');result=await verifyExport(values.directory,{url:values.url,bindingsFile:values.bindings,targetConfig:values['target-config'],signal:controller.signal});process.exitCode=(result as {exitCode:number}).exitCode===0?0:2;break;

@@ -1,6 +1,16 @@
 # Project onboarding
 
-Accept a URL, an existing service, or a project directory. Configuration precedence is explicit input, selected `webpilot.config.json`, then discovery. Unknown frameworks are supported through a URL. No source or Git repository is required.
+Accept a URL, an existing service, or a project directory. Configuration precedence is actual explicit input, selected `webpilot.config.json`, discovery, then defaults. Unknown frameworks are supported through a URL. No source or Git repository is required.
+
+## 最终目标配置
+
+原始计划和覆盖草稿先读取项目配置，再补默认值；没有提供的字段不会以默认值覆盖配置。嵌套对象仍整体替换，例如本次提供 `evidence:{"video":false}` 时，整个 evidence 对象优先于项目配置，其中省略的 live、retentionDays 使用各自默认值，不做深度合并。
+
+新计划和覆盖记录保存 `targetResolution:{schemaVersion:1,sources:{...}}`，以及解析完成的 target。sources 区分 explicit、config、discovery/README、default 等来源。后续执行、运行保留策略和回放使用这份最终配置，不再自动读取可能变化的项目配置文件；只有本次显式覆盖可建立新的配置基准。带元数据但目标无效或解析版本未知时直接拒绝，不回退到当前配置。
+
+例如项目配置为 `{"viewport":{"width":390,"height":844},"evidence":{"video":false,"live":false}}`，原始 target 只给 URL 和 projectPath 时，发布清单、首次执行和保存计划都使用移动视口且关闭录像和直播。配置解析和仅生成操作只读取文件及发现信息，不启动服务、浏览器或数据命令。未知或有歧义的可执行目标需先补齐信息。
+
+只读接入结果仍可显示候选及缺口。静态服务保留 staticDir 启动意图，临时端口记录于当次报告及实时状态；下次可重新分配端口，视口与证据策略保持不变。原始值是调用方已展开的完整对象时，其中实际提交的默认值也按显式值解释。
 
 Optional target fields:
 - `projectPath`, `configPath`, `application`: select the application/workspace.

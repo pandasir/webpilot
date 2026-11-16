@@ -93,8 +93,13 @@ test('cleanup runs after preparation failure, assertions, cancellation and clean
     assert.equal(await readFile(log,'utf8'),'prepare\ncleanup\n');
     const prep=await runPlan(plan(f.url,loginSteps(),{target:{data:{prepare:command('bad-prepare',1),cleanup:command('cleanup')}}}),{dataDir:f.dataDir});assert.equal(prep.outcome,'blocked');
     const cleanup=await runPlan(plan(f.url,loginSteps(),{target:{data:{cleanup:command('bad-cleanup',1)}}}),{dataDir:f.dataDir});assert.equal(cleanup.outcome,'inconclusive');assert.ok(cleanup.cleanupErrors.length);
-    const controller=new AbortController();setTimeout(()=>controller.abort(),300);
-    const cancellation=await runPlan(plan(f.url,[{id:'wait',op:'expectText',locator:selector('h1'),expected:'never',source}],{target,budget:{assertionMs:5000}}),{dataDir:f.dataDir,signal:controller.signal});assert.equal(cancellation.outcome,'inconclusive');
+    const controller=new AbortController();const settled=await readFile(log,'utf8');
+    const running=runPlan(plan(f.url,[{id:'wait',op:'expectText',locator:selector('h1'),expected:'never',source}],{target,budget:{assertionMs:5000}}),{dataDir:f.dataDir,signal:controller.signal});
+    // Cancelling on a fixed delay lands mid-startup on a slow runner, so wait for the run to
+    // reach its prepare command and cancel from inside the attempt instead.
+    const deadline=Date.now()+30000;while(!(await readFile(log,'utf8')).startsWith(`${settled}prepare\n`)){if(Date.now()>deadline)throw new Error('Cancellation run never reached its prepare command');await new Promise(r=>setTimeout(r,25));}
+    controller.abort();
+    const cancellation=await running;assert.equal(cancellation.outcome,'inconclusive');
     assert.ok((await readFile(log,'utf8')).endsWith('prepare\ncleanup\n'));
     const retry=await runPlan(plan(f.url+'/retry',[{id:'title',op:'expectText',locator:selector('h1'),expected:'Test frontend',source}],{budget:{attempts:2}}),{dataDir:f.dataDir});
     assert.equal(retry.outcome,'passed');assert.equal(retry.exitCode,2);assert.equal(retry.unstable,true);assert.deepEqual(retry.cases[0].attempts.map(a=>a.outcome),['failed','passed']);

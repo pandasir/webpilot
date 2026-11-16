@@ -2,6 +2,8 @@
 
 [中文说明](README.md)
 
+[![Discussions](https://img.shields.io/badge/GitHub-Discussions-2ea44f?logo=github&logoColor=white)](https://github.com/pandasir/webpilot/discussions)
+
 WebPilot is a local Web UI acceptance and regression plugin for Codex. Any project you can open in a browser can be tested with it: React, Vue, Next.js, static HTML, or a site whose stack you don't even know. Point it at a URL and it runs. The target project needs no test dependencies and no test IDs.
 
 Codex reads the requirement, plans the steps, and analyzes failures. The local runner does the real Chromium work, assertions, and evidence capture. Once a case is saved, its expectations never change. Regression cases can be replayed from the CLI with no model involved, and exported as a standalone Playwright test package.
@@ -445,7 +447,9 @@ The detailed documentation is currently written in Chinese.
 
 ## Feedback and contributions
 
-If something breaks, follow the [pre-issue checklist](.github/CONTRIBUTING.md) to confirm your environment first, then pick the matching issue template. Installation, interface, and compatibility questions are usually answered faster by the docs listed above.
+Usage questions, ideas, and war stories go to [Discussions](https://github.com/pandasir/webpilot/discussions). You don't need an issue for those. Installation problems, runs that won't start, and unclear reports fit best in the Q&A category; dashboard screenshots, integration setups, and CI export recipes belong in Show and tell, where others can copy them.
+
+For a confirmed defect, a feature request, or a documentation error, follow the [pre-issue checklist](.github/CONTRIBUTING.md) to confirm your environment first, then pick the matching issue template. Installation, interface, and compatibility questions are usually answered faster by the docs listed above.
 
 ## License
 

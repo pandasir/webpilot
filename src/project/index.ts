@@ -46,13 +46,13 @@ export async function inspectProject(input:unknown):Promise<Inspection> {
   let configured:Record<string,unknown>={};
   let configFile=supplied.configPath?resolve(supplied.configPath):projectPath?join(projectPath,'webpilot.config.json'):undefined;
   if(configFile) {
-    const content=await text(configFile);
-    if(content) configured=JSON.parse(content);
-    else if(supplied.configPath) throw new PilotError('CONFIG_MISSING',`Configuration is unavailable: ${configFile}`);
+    try{configured=JSON.parse(await readFile(configFile,'utf8'));TargetSchema.partial().parse(configured);}
+    catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT'&&!supplied.configPath){/* Optional project config. */}
+      else throw new PilotError((error as NodeJS.ErrnoException).code==='ENOENT'?'CONFIG_MISSING':'CONFIG_INVALID',`Configuration is unavailable or invalid: ${configFile}`);}
   }
   const sources:Record<string,string>={};
   // Parse raw input before applying defaults, so defaults never overwrite configured values.
-  const raw=input as Record<string,unknown>;
+  const raw=Object.fromEntries(Object.entries(input as Record<string,unknown>).filter(([,value])=>value!==undefined));
   const merged={...configured,...raw,...(projectPath?{projectPath}:{})};
   for(const key of Object.keys(merged)) sources[key]=key in raw?'explicit':'config';
   let target=TargetSchema.parse(merged);
@@ -76,6 +76,7 @@ export async function inspectProject(input:unknown):Promise<Inspection> {
   if(!target.url && !target.staticDir) gaps.push(candidates.length>1?'Select an application/startup candidate, or supply an explicit URL.':'Provide a URL and startup command, or a staticDir.');
   if(!projectPath) gaps.push('Source and Git impact analysis unavailable for URL-only target.');
   if(target.command && !target.command.cwd) target.command.cwd=target.projectPath;
+  for(const key of Object.keys(target))sources[key]??='default';
   return {target,sources,candidates,gaps,ready:!!target.url || !!target.staticDir};
 }
 

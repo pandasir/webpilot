@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const VERSION = '0.1.0';
+export {VERSION} from './version.js';
 const Id = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/);
 export const BindingsSchema = z.record(Id,z.string());
 export const HttpUrlSchema = z.string().url().refine(value=>{
@@ -81,8 +81,10 @@ export const CaseSchema = z.object({
     ctx.addIssue({ code:'custom', message:'Regression-ready cases need formal assertions and no conflicts' });
   }
 });
+export const TargetResolutionSchema = z.object({schemaVersion:z.literal(1),sources:z.record(z.string())}).strict();
+export type TargetResolution = z.infer<typeof TargetResolutionSchema>;
 export const PlanSchema = z.object({
-  schemaVersion: z.literal(1), id: Id, target: TargetSchema,
+  schemaVersion: z.literal(1), id: Id, target: TargetSchema, targetResolution:TargetResolutionSchema.optional(),
   scope: z.array(z.string()).min(1), gaps: z.array(z.string()).default([]), cases: z.array(CaseSchema).min(1)
 }).strict().superRefine((plan, ctx) => {
   if (new Set(plan.cases.map(c=>c.id)).size !== plan.cases.length) ctx.addIssue({code:'custom',message:'Case ids must be unique'});

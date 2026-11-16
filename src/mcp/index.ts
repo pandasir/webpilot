@@ -4,8 +4,9 @@ import { WebPilotService,ToolInputs,dispatch } from '../core/service.js';
 import { Redactor } from '../artifacts/redaction.js';
 import {errorInfo} from '../core/errors.js';
 import {endpointAt,internal,requireCoverageDashboard} from '../dashboard/lifecycle.js';
+import {VERSION} from '../core/version.js';
 
-const server = new McpServer({ name: 'webpilot', version: '0.1.0' });
+const server = new McpServer({ name: 'webpilot', version: VERSION });
 const service=new WebPilotService(process.env.WEBPILOT_DATA_DIR);
 const dashboardDisabledSessions=new Set<string>();
 const descriptions:Record<string,string>={

@@ -60,6 +60,22 @@ codex plugin add webpilot@webpilot-local
 
 The marketplace contains a self-contained plugin copy with its own Node dependencies. Target applications do not install WebPilot. The portable manifest and a Codex compatibility overlay are included; neither defines lifecycle hooks.
 
+## 核对源码、发行包与运行时版本
+
+源码版本以 package.json.version 为准，插件清单及锁文件根字段必须一致。维护者明确改版后执行 `npm run version:sync`；普通安装与构建不会自动改写这些清单。
+
+```sh
+npm run check:version
+npm run build
+npm run check:version -- --built
+node scripts/package-plugin.mjs /path/to/webpilot-marketplace
+node /path/to/webpilot-marketplace/plugins/webpilot/dist/cli/index.js doctor --data-dir /path/to/writable/version-check-data
+```
+
+打包直接入口也会拒绝缺少构建元数据或与源码不一致的旧 dist，暂存包校验失败不会替换已有有效发行目录。输出应使用新目录、空目录或可识别的单插件 WebPilot Local 市场，其他非空目录会被拒绝。成功后，包内 package.json、plugin.json、.codex-plugin/plugin.json、锁文件根字段和 doctor.version 必须一致。使用新连接调用 runtime_info 并核对 MCP serverInfo.version，可确认实际加载了哪份执行器。
+
+构建快照缺失或损坏时重新运行完整 build 并重新打包；已安装包损坏时重装完整包，不单独复制清单或 release.json。更新文件不会改变已运行进程的发布身份，需要重新启动相应进程/会话后核对。回滚也使用完整旧发行包；历史报告与已有独立导出包保留原版本记录。
+
 Refresh installed files after rebuilding the source and packaging. Start a new Codex session so skills and tools can be loaded. Keep an earlier marketplace package to roll back. `codex plugin remove webpilot@webpilot-local` removes the installed plugin; saved test data remains in WebPilot storage. To remove its catalog too, use `codex plugin marketplace remove webpilot-local`. To restore, re-register the earlier marketplace package and install again.
 
 Official packaging reference: https://developers.openai.com/plugins/build/plugins . Local plugin support varies by host. `node scripts/host-check.mjs /path/to/webpilot-marketplace` checks a fresh installed Codex binary's package parsing and a real packaged MCP handshake without starting a model turn or creating a user chat. It does not prove desktop UI installation or active-session refresh.
