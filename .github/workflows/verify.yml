@@ -5,7 +5,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        # Playwright 1.60.0 has no dependency set or browser build for the
+        # ubuntu-26.04 image that ubuntu-latest now resolves to, so ask for the
+        # supported 24.04 image explicitly. (Name it ubuntu-latest again once
+        # Playwright ships 26.04 support or the pin is no longer needed.)
+        os: [macos-latest, ubuntu-24.04, windows-latest]
         node: [22, 24]
     runs-on: ${{ matrix.os }}
     steps:

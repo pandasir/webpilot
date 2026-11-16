@@ -87,7 +87,13 @@ export class BrowserSession {
       await this.page.goto(this.target.url!,{waitUntil:'domcontentloaded',timeout:this.budget.timeout()});
       for(const step of role?.login ?? [])await this.perform(step);
       for(const step of role?.verify ?? [])await this.perform(step);
-    } catch(error){await this.close();if(role && (!(error instanceof PilotError) || error.code==='ASSERTION_FAILED'))throw new PilotError('AUTH_INVALID',this.redactor.text(error instanceof Error?error.message:String(error)));throw error;}
+    } catch(error){
+      await this.close();
+      // A cancellation can surface as a raw Playwright error (navigation aborted while
+      // the browser was still launching). Report it as cancellation, not infrastructure failure.
+      if(this.budget.signal?.aborted)throw new PilotError('CANCELLED','Run cancelled','inconclusive');
+      if(role && (!(error instanceof PilotError) || error.code==='ASSERTION_FAILED'))throw new PilotError('AUTH_INVALID',this.redactor.text(error instanceof Error?error.message:String(error)));throw error;
+    }
   }
   private attach(page:Page) {
     if(this.recordingDir)this.recordedPages.set(page,{pageId:`page-${this.recordedPages.size+1}`,pageName:`page-${this.recordedPages.size+1}`});

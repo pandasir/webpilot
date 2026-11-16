@@ -144,7 +144,8 @@ test('startup reclaims a dead owner lock, detects reused process identities and 
   await new Promise(ok=>occupied.listen(0,'127.0.0.1',ok));const port=occupied.address().port;
   let service;
   try{
-    assert.equal(await ownerAlive({pid:process.pid,nonce:meta().owner.nonce,started:'a different process start'}),false);
+    // Windows exposes no comparable process start stamp, so a live pid only proves the identity is unknown.
+    assert.equal(await ownerAlive({pid:process.pid,nonce:meta().owner.nonce,started:'a different process start'}),process.platform==='win32'?undefined:false);
     await mkdir(join(root,'startup.lock'));await atomicJson(join(root,'startup.lock','owner.json'),{pid:2147483647,nonce:meta().owner.nonce});
     await atomicJson(join(root,'last-port.json'),{port});
     const e=await ensureDashboard(root);assert.notEqual(Number(new URL(e.url).port),port);assert.equal(await(await fetch(`http://127.0.0.1:${port}`)).text(),'other application');
