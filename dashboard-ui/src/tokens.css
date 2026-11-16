@@ -1,0 +1,123 @@
+/*
+ * WebPilot design tokens
+ *
+ * Source of truth: DESIGN.md at the repository root.
+ * Base palette, spacing and radii come from the NerdWallet DESIGN.md.
+ * Tokens under "WebPilot semantic extensions" cover product states that a
+ * marketing site does not need (pass/fail/warn/info, overlays, focus rings).
+ */
+:root {
+  /* Brand & accent */
+  --color-primary: #008254;
+  --color-primary-deep: #006642;
+  --color-forest: #00482f;
+  --color-on-primary: #ffffff;
+  --color-logo-lime: #8dc63f;
+  --color-lime-hero: #9ae600;
+  --color-lime-panel: #e8fdac;
+  --color-lime-accent: #ddfa88;
+  --color-lime-ribbon: #a8ea4c;
+
+  /* Surfaces */
+  --color-canvas: #ffffff;
+  --color-canvas-soft: #f7f7f7;
+  --color-mint-50: #effcf8;
+  --color-mint-100: #e3faf2;
+  --color-mint-200: #b7ecda;
+  --color-hairline: #ebebec;
+  --color-hairline-strong: #d8d9da;
+
+  /* Text */
+  --color-ink: #000000;
+  --color-body: #3d4045;
+  --color-muted: #64666a;
+  --color-faint: #b1b3b5;
+  /* WebPilot extension: small UI labels need more contrast than fine print. */
+  --color-faint-ui: #7f858a;
+
+  /* Semantic */
+  --color-link: #005fb9;
+  --color-info: #4b99e6;
+  --color-error: #de2828;
+
+  /* WebPilot semantic extensions */
+  --color-pass: var(--color-primary);
+  --color-pass-soft: var(--color-mint-100);
+  --color-pass-border: #b7ecda;
+  --color-fail: var(--color-error);
+  --color-fail-deep: #b81f1f;
+  --color-fail-soft: #fdecec;
+  --color-fail-border: #f6c7c7;
+  --color-fail-progress: #efaaaa;
+  --color-warn: #7a5a10;
+  --color-warn-soft: #fff8e6;
+  --color-warn-border: #f0dfb8;
+  --color-info-soft: #eaf3fc;
+  --color-info-border: #cfe2f5;
+  --color-info-progress: #a8c8e9;
+  --color-focus: var(--color-primary);
+  --color-focus-ring: #00825433;
+  --color-focus-ring-strong: #00825459;
+  --color-control-hover: #c7d8d1;
+  --color-overlay: #000000b8;
+  --color-backdrop: #00000052;
+  --color-media-surface: #17191a;
+  --color-neutral-dot: #b1b3b5;
+
+  /* Typography: Montserrat is the documented Gotham substitute. */
+  --font-sans: "Montserrat", "Gotham", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: "Montserrat", "GothamDisplay", "Gotham", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Monaco,
+    "Cascadia Code", monospace;
+
+  --text-display-xl: 52px;
+  --text-display-lg: 40px;
+  --text-heading-1: 36px;
+  --text-heading-2: 28px;
+  --text-heading-3: 20px;
+  --text-heading-4: 20px;
+  --text-stat-value: 24px;
+  --text-body-lg: 18px;
+  --text-body-md: 16px;
+  --text-body-sm: 14px;
+  --text-ui-label: 14px;
+  --text-ui-sm: 13px;
+  --text-caption: 12px;
+  --text-micro: 11px;
+
+  /* Spacing: 8px base unit */
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 20px;
+  --space-xl: 24px;
+  --space-xxl: 32px;
+  --space-section: 40px;
+
+  /* Radii: controls stay nearly square, cards stop at 8px */
+  --radius-none: 0px;
+  --radius-xxs: 1px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-xxl: 12px;
+  --radius-xxxl: 16px;
+  --radius-tooltip: 20px;
+  --radius-full: 9999px;
+
+  /* Component aliases used by the dashboard */
+  --radius-control: 2px;
+  --radius-surface: 6px;
+  --radius-card: 8px;
+
+  /* Elevation stays at 4–5% opacity */
+  --shadow-sm: 0 1px 0 #64666a08;
+  --shadow: 0 4px 16px #64666a0d, 0 16px 40px #64666a0d;
+  --shadow-overlay: 0 20px 25px -5px #0000000a, 0 8px 10px -6px #0000000a;
+  --shadow-preview: 0 24px 100px #00000040;
+}
