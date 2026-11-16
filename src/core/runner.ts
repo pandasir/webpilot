@@ -1,11 +1,11 @@
 import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import {writeFile,chmod} from 'node:fs/promises';
-import {PlanSchema,CaseSchema,RunSchema,BindingsSchema,VERSION,isAssertion,type Plan,type Case,type Run,type Attempt,type StepResult,type Bindings} from './schema.js';
+import {PlanSchema,CaseSchema,RunSchema,BindingsSchema,VERSION,isAssertion,type Plan,type Case,type Run,type Attempt,type StepResult,type Bindings,type TargetResolution} from './schema.js';
 import {PilotError,errorInfo,type Outcome} from './errors.js';
 import {Budget} from './budget.js';
 import {BrowserSession} from '../browser/session.js';
-import {inspectProject,prepareService,runCommand,collectContext} from '../project/index.js';
+import {prepareService,runCommand,collectContext} from '../project/index.js';
 import {Redactor,assertPortable} from '../artifacts/redaction.js';
 import {Store,markdownReport} from '../artifacts/store.js';
 import {Progress} from './progress.js';
@@ -13,8 +13,9 @@ import {CoverageStore} from '../artifacts/coverage.js';
 import {coverageFromPlan,verifyCoveragePlan,coverageResult,reconciliationMarkdown,type CoverageRef} from './coverage.js';
 import {atomicJson} from '../dashboard/files.js';
 import {summarizeAcceptance} from './acceptance.js';
+import {resolvePlan,fixedTarget,adoptedTarget,requireReady} from '../project/target.js';
 
-export interface RunOptions{dataDir?:string;bindings?:Bindings;signal?:AbortSignal;headful?:boolean;dashboard?:boolean;dashboardRoot?:string;coverage?:CoverageRef;exploratory?:boolean}
+export interface RunOptions{dataDir?:string;bindings?:Bindings;signal?:AbortSignal;headful?:boolean;dashboard?:boolean;dashboardRoot?:string;coverage?:CoverageRef;exploratory?:boolean;targetResolution?:TargetResolution}
 export function summarize(results:{outcome:Outcome;unstable:boolean}[],cleanupErrors:string[]=[]){
   let outcome:Outcome=results.some(r=>r.outcome==='failed')?'failed':results.some(r=>r.outcome==='blocked')?'blocked':!results.length || results.some(r=>r.outcome==='inconclusive')?'inconclusive':'passed';
   if(cleanupErrors.length && outcome==='passed')outcome='inconclusive';
@@ -33,9 +34,19 @@ export async function capture(session:BrowserSession,store:Store,runId:string,ca
   catch(error){step.evidence.push({...base,id:`evidence-${randomUUID()}`,type:'omitted',reason:session.redactor.text(`截图不可用：${errorInfo(error).message}`)});}
 }
 export async function runPlan(input:unknown,options:RunOptions={}):Promise<Run>{
-  const plan=PlanSchema.parse(input);const bindings=BindingsSchema.parse(options.bindings ?? {});const redactor=new Redactor(bindings);const store=new Store(options.dataDir);
+  const store=new Store(options.dataDir),coverageStore=new CoverageStore(store.root);
+  const baseline=options.coverage?await coverageStore.snapshot(options.coverage):undefined;
+  let plan:Plan;
+  if(baseline){
+    const parsed=PlanSchema.parse(input);
+    const inspection=adoptedTarget((input as Plan).target,baseline.manifest.draft.target,baseline.manifest.draft.targetResolution);
+    plan={...parsed,target:inspection.target,targetResolution:inspection.targetResolution};
+    try{verifyCoveragePlan(baseline,plan);}catch(error){throw new PilotError('COVERAGE_MISMATCH',(error as Error).message);}
+  }else plan=await resolvePlan(input);
+  const inspection=fixedTarget(plan.target,plan.targetResolution);requireReady(inspection);
+  const bindings=BindingsSchema.parse(options.bindings ?? {});const redactor=new Redactor(bindings);
   assertPortable(plan,bindings);
-  const coverageStore=new CoverageStore(store.root);await coverageStore.prune();let coverage=options.coverage;
+  await coverageStore.prune();let coverage=options.coverage;
   if(!coverage){const created=await coverageStore.create(coverageFromPlan(plan),bindings);coverage={id:created.manifest.id,revision:created.manifest.revision};await coverageStore.adopt(coverage,'原有结构化计划，确定性派生覆盖清单');}
   const adopted=await coverageStore.snapshot(coverage);try{verifyCoveragePlan(adopted,plan);}catch(error){throw new PilotError('COVERAGE_MISMATCH',(error as Error).message);}
   const id=`run-${randomUUID()}`;await store.prune();await store.beginRun(id,plan.target.evidence.retentionDays,plan.target.evidence.rawTrace,plan.target.evidence.video);
@@ -44,14 +55,12 @@ export async function runPlan(input:unknown,options:RunOptions={}):Promise<Run>{
   const progress=await Progress.create(store.runDir(id),store.root,{id,title:plan.scope.join('、'),mode:'suite',target:plan.target.url??'准备目标中',project:plan.target.projectPath,startedAt,totalCases:plan.cases.length,cases:plan.cases.map(c=>({id:c.id,title:c.title,version:c.version})),live:plan.target.evidence.live},redactor,options);
   try{
   await progress.phase('preparing','检查项目与目标服务');
-  const inspection=await inspectProject((input as Plan).target);plan.target=inspection.target;
-  await store.configureRun(id,plan.target.evidence);
   await progress.target(inspection.target);
   const signal=AbortSignal.any([...(options.signal?[options.signal]:[]),AbortSignal.timeout(plan.target.budget.totalMs)]);
   const budget=new Budget(plan.target.budget,signal);
   const results:Run['cases']=[];const cleanupErrors:string[]=[];let browserVersion='unavailable';
   let service:Awaited<ReturnType<typeof prepareService>>|undefined;
-  const target=inspection.target;
+  const target=structuredClone(inspection.target);
   let setupError:ReturnType<typeof errorInfo>|undefined;
   try{service=await prepareService(inspection,signal);target.url=service.target.url;await progress.target(target);}
   catch(error){setupError=errorInfo(error);}
@@ -141,7 +150,7 @@ export async function saveCase(input:unknown,target:Plan['target'],options:RunOp
   }
   c.verifiedBy=undefined;
   if(options.promote){
-    const run=await runPlan({schemaVersion:1,id:`promotion-${randomUUID()}`,target,scope:[c.title],cases:[{...c,state:'draft'}]},options);
+    const run=await runPlan({schemaVersion:1,id:`promotion-${randomUUID()}`,target,targetResolution:options.targetResolution,scope:[c.title],cases:[{...c,state:'draft'}]},options);
     verifiedBy=run.id;
     c.state=run.exitCode===0&&!run.acceptance?.supplementary.issues&&!run.acceptance?.supplementary.incomplete?'regression-ready':'draft';if(c.state==='regression-ready')c.verifiedBy=run.id;
   }else c.state='draft';

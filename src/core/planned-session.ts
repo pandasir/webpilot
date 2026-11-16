@@ -6,14 +6,15 @@ import {CoverageStore} from '../artifacts/coverage.js';
 import {Store,markdownReport} from '../artifacts/store.js';
 import {Redactor,assertPortable} from '../artifacts/redaction.js';
 import {atomicJson} from '../dashboard/files.js';
-import {inspectProject,prepareService,runCommand} from '../project/index.js';
+import {prepareService,runCommand} from '../project/index.js';
 import {Budget} from './budget.js';
 import {Progress} from './progress.js';
 import {capture,type RunOptions} from './runner.js';
-import {BindingsSchema,RunSchema,StepSchema,TargetSchema,VERSION,isAssertion,type Run,type Attempt,type StepResult,type Case} from './schema.js';
+import {BindingsSchema,RunSchema,StepSchema,VERSION,isAssertion,type Run,type Attempt,type StepResult,type Case} from './schema.js';
 import {coveragePlan,coverageResult,reconciliationMarkdown,digest,type CoverageSnapshot,type CoverageRef} from './coverage.js';
 import {PilotError,errorInfo} from './errors.js';
 import {summarizeAcceptance} from './acceptance.js';
+import {adoptedTarget,requireReady} from '../project/target.js';
 
 type Result=Run['cases'][number];
 interface Live {
@@ -31,15 +32,16 @@ export class PlannedSessions {
   private live(id:string){const live=this.sessions.get(id);if(!live||live.closing)throw new PilotError('SESSION_EXPIRED','Planned session unavailable');return live;}
   private async exclusive<T>(live:Live,work:()=>Promise<T>){if(live.busy)throw new PilotError('SESSION_BUSY','Wait for the current operation');const task=work();live.busy=task;try{return await task;}finally{live.busy=undefined;}}
   async open(input:unknown,options:RunOptions&{coverage:CoverageRef;title?:string}){
-    const target=TargetSchema.parse(input),bindings=BindingsSchema.parse(options.bindings??{}),redactor=new Redactor(bindings);assertPortable(target,bindings);
     const snapshot=await this.coverageStore.snapshot(options.coverage);
+    const inspection=adoptedTarget(input,snapshot.manifest.draft.target,snapshot.manifest.draft.targetResolution);requireReady(inspection);
+    const target=inspection.target,bindings=BindingsSchema.parse(options.bindings??{}),redactor=new Redactor(bindings);assertPortable(target,bindings);
     if(digest(target)!==digest(snapshot.manifest.draft.target))throw new PilotError('COVERAGE_MISMATCH','Target differs from the adopted coverage plan');
-    const plan=coveragePlan(snapshot),runId=`run-${randomUUID()}`,id=`session-${randomUUID()}`;await this.store.prune();await this.store.beginRun(runId,target.evidence.retentionDays,target.evidence.rawTrace,target.evidence.video);
+    const plan={...coveragePlan(snapshot),targetResolution:inspection.targetResolution},runId=`run-${randomUUID()}`,id=`session-${randomUUID()}`;await this.store.prune();await this.store.beginRun(runId,target.evidence.retentionDays,target.evidence.rawTrace,target.evidence.video);
     await this.coverageStore.saveSnapshot(options.coverage,this.store.runDir(runId));await atomicJson(join(this.store.runDir(runId),'plan.json'),plan);await this.coverageStore.link(options.coverage,runId);
     const startedAt=new Date().toISOString();const progress=await Progress.create(this.store.runDir(runId),this.store.root,{id:runId,title:options.title??snapshot.manifest.draft.title,titleSource:'task',mode:'planned-session',target:target.url??'准备目标中',project:target.projectPath,startedAt,totalCases:plan.cases.length,cases:plan.cases.map(c=>({id:c.id,title:c.title,version:c.version})),live:target.evidence.live},redactor,options);
     const controller=new AbortController(),signal=options.signal?AbortSignal.any([controller.signal,options.signal]):controller.signal;const timer=setTimeout(()=>controller.abort(),target.budget.totalMs);let service:Live['service']|undefined,context:BrowserSession|undefined;
     try{
-      await progress.phase('preparing','准备覆盖计划的前置观察');const inspection=await inspectProject(input);service=await prepareService(inspection,signal);await progress.target(service.target);await this.store.configureRun(runId,service.target.evidence);
+      await progress.phase('preparing','准备覆盖计划的前置观察');service=await prepareService(inspection,signal);await progress.target(service.target);
       const budget=new Budget(service.target.budget,signal);context=new BrowserSession(service.target,budget,bindings,redactor);await progress.attach(context,'observation',1);await context.open({headful:options.headful,recordingDir:join(this.store.runDir(runId),'videos','observation','1')});
       const live:Live={id,runId,snapshot,service,progress,budget,redactor,bindings,headful:options.headful,context,results:[],controller,signal,timer,cleanupErrors:[],startedAt,browserVersion:context.browser.version(),observations:[]};this.sessions.set(id,live);await this.persist(live);
       signal.addEventListener('abort',()=>{void this.close(id).catch(()=>{});},{once:true});if(signal.aborted)void this.close(id).catch(()=>{});
@@ -57,7 +59,7 @@ export class PlannedSessions {
     if(!item?.selected)throw new PilotError('CASE_NOT_SELECTED','Case is not in the adopted selected scope');
     for(const done of live.results){const before=live.snapshot.manifest.draft.items.find(i=>i.id===done.id),after=snapshot.manifest.draft.items.find(i=>i.id===done.id);if(!after?.selected||digest(before?.executable)!==digest(after.executable))throw new PilotError('EXECUTED_CASE_CHANGED','Do not alter cases already attempted in this run');}
     // Save the adopted revision before any new operation or data preparation.
-    await this.coverageStore.saveSnapshot(ref,this.store.runDir(live.runId));await atomicJson(join(this.store.runDir(live.runId),'plan.json'),coveragePlan(snapshot));live.snapshot=snapshot;await live.progress.emit('coverage.updated',{revision:ref.revision,cases:coveragePlan(snapshot).cases.map(c=>({id:c.id,title:c.title,version:c.version}))});
+    await this.coverageStore.saveSnapshot(ref,this.store.runDir(live.runId));await atomicJson(join(this.store.runDir(live.runId),'plan.json'),{...coveragePlan(snapshot),targetResolution:{schemaVersion:1,sources:live.service.sources}});live.snapshot=snapshot;await live.progress.emit('coverage.updated',{revision:ref.revision,cases:coveragePlan(snapshot).cases.map(c=>({id:c.id,title:c.title,version:c.version}))});
     await this.closeContext(live,'observation',1);
     const test=coveragePlan(snapshot).cases.find(c=>c.id===caseId)!;let result=live.results.find(c=>c.id===caseId);
     if(result&&(result.outcome!=='failed'||result.attempts.length>=live.service.target.budget.attempts))throw new PilotError('CASE_ALREADY_FINISHED','Case has finished or its attempt budget is exhausted');
@@ -93,7 +95,7 @@ export class PlannedSessions {
       if(live.active?.test.id===result.id){if(!before||!after||digest({...before,steps:[],locatorRepairs:[]})!==digest({...after,steps:[],locatorRepairs:[]}))throw new PilotError('EXECUTED_CASE_CHANGED','Keep active role, prerequisites and case metadata unchanged');for(let n=0;n<live.active.attempt.steps.length;n++)if(digest(before.steps[n])!==digest(after.steps[n]))throw new PilotError('EXECUTED_CASE_CHANGED','Keep already executed steps unchanged');}
       else if(digest(before)!==digest(after))throw new PilotError('EXECUTED_CASE_CHANGED','Keep completed cases unchanged');
     }
-    await this.coverageStore.saveSnapshot(ref,this.store.runDir(live.runId));await atomicJson(join(this.store.runDir(live.runId),'plan.json'),coveragePlan(snapshot));live.snapshot=snapshot;
+    await this.coverageStore.saveSnapshot(ref,this.store.runDir(live.runId));await atomicJson(join(this.store.runDir(live.runId),'plan.json'),{...coveragePlan(snapshot),targetResolution:{schemaVersion:1,sources:live.service.sources}});live.snapshot=snapshot;
     if(live.active)live.active.test=snapshot.manifest.draft.items.find(i=>i.id===live.active!.test.id)!.executable!;
     await live.progress.emit('coverage.updated',{revision:ref.revision,cases:coveragePlan(snapshot).cases.map(c=>({id:c.id,title:c.title,version:c.version}))});await this.persist(live);return {sessionId:id,runId:live.runId,coverage:ref};
   });}

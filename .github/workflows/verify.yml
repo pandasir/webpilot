@@ -15,8 +15,10 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm run check:version
       - run: npx playwright install --with-deps chromium
       - run: npm test
+      - run: npm run check:version -- --built
       - run: node dist/cli/index.js doctor --data-dir .webpilot/ci-data
       - run: npm ci --ignore-scripts --prefix tests/fixtures
       - run: node scripts/compatibility-check.mjs

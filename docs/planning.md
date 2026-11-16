@@ -8,6 +8,10 @@ Candidates alone produce an inconclusive result. Missing prerequisites are recor
 
 ## 测试前覆盖清单
 
+覆盖清单发布前先解析最终目标配置，再写入 target 和可选 targetResolution 来源记录。配置读取只做发现与校验，generate-only/preview-only 不启动服务、浏览器或数据脚本。采用之后，执行使用该版本保存的配置；项目配置文件变化不会改变其视口、证据策略、角色、数据与预算。
+
+suite_run 提供的 plan 或 session_open 提供的 target 可以省略由采用清单保存的目标字段；实际提交的设置必须与采用版本一致。冲突返回 COVERAGE_MISMATCH，并在服务、数据流程及浏览器启动前拒绝执行；需创建并采用新的目标计划，不自动替换旧版本。旧已采用清单缺少解析元数据时，其保存 target 仍是执行基准。
+
 覆盖清单独立于可执行 Plan/Case，记录需求与稳定用例 ID 的映射、场景由谁提出、优先级、补充理由、前置条件、操作意图、预期依据以及本次安排。`suggestedBy:ai` 表示 AI 提出了场景，正式断言仍需 `user / openspec / regression` 依据；仅页面观察产生的预期保持候选。未知完整需求时不计算全站覆盖百分比。
 
 用例的 `selected`、`readiness` 和执行结果分别表示“是否纳入本次”“当前是否具备条件”和“实际验证结论”。未选建议保留理由，不影响本次选定范围的通过；选中但未验证的必需项使验收保持不完整。默认最多两轮生成、十二条 AI 补充场景，用户明确要求不被该新增数量上限截断。

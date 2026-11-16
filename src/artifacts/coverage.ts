@@ -9,6 +9,7 @@ import {PilotError} from '../core/errors.js';
 import {Redactor,assertPortable} from './redaction.js';
 import {withRunLock} from './management.js';
 import {atomicJson,openArtifact} from '../dashboard/files.js';
+import {resolveTarget,fixedTarget,requireReady} from '../project/target.js';
 
 const State=z.object({schemaVersion:z.literal(1),id:z.string(),revision:z.number().int().positive(),revisions:z.array(z.number().int().positive()),adoptions:z.array(CoverageAdoptionSchema),runs:z.array(z.string())}).strict();
 const missing=(e:unknown)=>(e as NodeJS.ErrnoException).code==='ENOENT';
@@ -22,7 +23,9 @@ export class CoverageStore {
   private checkExpiry(m:CoverageManifest){if(Date.parse(m.expiresAt)<=Date.now())throw new PilotError('PLAN_EXPIRED','Coverage plan expired; generate a new plan');}
   private clean(input:unknown,bindings:Record<string,string>){const parsed=CoverageDraftSchema.parse(input);assertPortable(parsed.target,bindings);for(const item of parsed.items)if(item.executable)assertPortable(item.executable,bindings);return CoverageDraftSchema.parse(new Redactor(bindings).object(parsed));}
   async create(input:unknown,bindings:Record<string,string>={}){
-    const draft=this.clean(input,bindings);const id=`plan-${randomUUID()}`;await this.directory(this.root,true);await this.directory(join(this.root,'plans'),true);await this.directory(this.dir(id),true);await this.directory(join(this.dir(id),'revisions'),true);
+    const raw=z.object({target:z.unknown(),targetResolution:z.unknown().optional()}).passthrough().parse(input);
+    const inspection=await resolveTarget(raw.target,raw.targetResolution);requireReady(inspection);
+    const draft=this.clean({...raw,target:inspection.target,targetResolution:inspection.targetResolution},bindings);const id=`plan-${randomUUID()}`;await this.directory(this.root,true);await this.directory(join(this.root,'plans'),true);await this.directory(this.dir(id),true);await this.directory(join(this.dir(id),'revisions'),true);
     const now=new Date();const manifest=CoverageManifestSchema.parse({id,revision:1,createdAt:now.toISOString(),expiresAt:new Date(+now+draft.target.evidence.retentionDays*86400000).toISOString(),reason:'初始覆盖计划',requestId:'initial',draft});
     await writeFile(join(this.dir(id),'revisions','1.json'),JSON.stringify(manifest)+'\n',{flag:'wx',mode:0o600});await atomicJson(join(this.dir(id),'state.json'),{schemaVersion:1,id,revision:1,revisions:[1],adoptions:[],runs:[]});return this.read({id,revision:1});
   }
@@ -33,9 +36,13 @@ export class CoverageStore {
     const adoption=state.adoptions.find(a=>a.revision===revision);return {manifest,adoption,runs:state.runs,status:coverageStatus(manifest,!!adoption),currentRevision:state.revision};
   }
   async update(id:string,expectedRevision:number,requestId:string,input:unknown,reason:string,bindings:Record<string,string>={}){
-    CoverageRefSchema.parse({id:requestId,revision:expectedRevision});if(!reason.trim())throw new PilotError('CHANGE_REASON_MISSING','Coverage updates need a reason');const draft=this.clean(input,bindings);const safeReason=new Redactor(bindings).text(reason);
+    CoverageRefSchema.parse({id:requestId,revision:expectedRevision});if(!reason.trim())throw new PilotError('CHANGE_REASON_MISSING','Coverage updates need a reason');const safeReason=new Redactor(bindings).text(reason);
     return withRunLock(this.root,`coverage-${digest(id).slice(0,32)}`,async()=>{
       const current=await this.read({id});const state=await this.state(id);await this.directory(join(this.dir(id),'revisions'));const revisions=(await readdir(join(this.dir(id),'revisions'))).filter(f=>/^\d+\.json$/.test(f));
+      const parsed=CoverageDraftSchema.parse(input);
+      const metadata=current.manifest.draft.targetResolution;
+      fixedTarget(parsed.target,parsed.targetResolution??metadata);
+      const draft=this.clean({...parsed,targetResolution:metadata},bindings);
       const aiIds=new Set(draft.items.filter(i=>i.suggestedBy==='ai').map(i=>i.id));
       for(const file of revisions){const previous=CoverageManifestSchema.parse(await this.json(join(this.dir(id),'revisions',file)));if(state.revisions.includes(previous.revision))for(const item of previous.draft.items)if(item.suggestedBy==='ai')aiIds.add(item.id);if(previous.requestId===requestId){if(digest(previous.draft)!==digest(draft)||previous.reason!==safeReason)throw new PilotError('REQUEST_ID_REUSED','Request id was already used for different content');if(state.revisions.includes(previous.revision))return this.read({id,revision:previous.revision});}}
       if(aiIds.size>draft.generation.maxAdditionalCases)throw new PilotError('GENERATION_LIMIT_EXCEEDED','AI additions across revisions exceed the generation budget');

@@ -22,6 +22,8 @@ Values can be literals or runtime `{ ref }` values. Use references for credentia
 
 ## 有覆盖清单的增量会话
 
+会话使用已采用清单中固定的最终目标，观察和每条用例共享该配置，不在打开会话或切换用例时重新读取项目配置。启动前保存的计划、覆盖快照和证据保留策略必须一致；保存输入失败时不启动目标环境。staticDir 的 URL 由本次服务分配，记录在报告和实时状态中，下次回放可使用不同端口。
+
 session_open 关联已采用覆盖版本后，session_observe 是前置观察。业务动作必须在 session_case_begin/end 内，并提供当前 caseId、revision、attempt。每条用例独立准备/清理数据及角色 context，整个请求共用 sessionId、runId 和总预算；角色状态不互相污染。
 
 步骤顺序、预期或未执行定位改变时须先发布相应清单版本，按模式采用后 session_case_sync；已执行步骤不能改写。允许的重试必须先结束失败尝试，并遵守 attempts 上限。未执行完即关闭会话不算通过。浏览器或预算阻塞时保留证据和缺口，不自动新建替代运行。

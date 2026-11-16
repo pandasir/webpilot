@@ -4,6 +4,8 @@
 
 测试报告默认使用简体中文，包含结果状态、覆盖范围、步骤、证据、清理问题及复现方法。四个 Skill 的计划、用例标题和对用户的结论也使用简体中文。JSON 字段及 passed/failed/blocked/inconclusive 等机器可读状态保持稳定；页面文本、预期值和底层诊断保留原文，避免改变断言或丢失证据。
 
+套件与已采用覆盖的增量会话在 environment.runner 中记录实际执行器的构建版本，Markdown 的“运行器版本”使用同一值；它与本进程 runtime_info、doctor 和 MCP 服务身份一致。构建后修改源码 package.json 不会改变已有执行器的版本。升级后回放会生成带新执行器版本的新报告，原报告的版本、用例和文件内容保持原样；旧记录中的误报也不会被当前版本追溯改写。
+
 `passed`: all required formal assertions executed with valid prerequisites and satisfied. `failed`: an explicit formal assertion is violated. `blocked`: environment, permissions, identity or data prevents execution. `inconclusive`: missing expectations, evidence, capabilities, cancellation or exhausted budgets leaves behavior unverified.
 
 Retries preserve every attempt. Passing only after failure is unstable. Partial coverage is visible and never described as complete verification. Diagnostic hypotheses are separate from execution facts.

@@ -47,3 +47,21 @@ npm test
 `npm test` 会先 build，再跑全部真实浏览器用例。测试需要 loopback 服务和启动 Chromium 的权限。
 
 改动涉及界面或执行行为时，同步更新对应的 `docs/*-acceptance.md`；改了用法就更新 README 与 `docs/interfaces.md`。
+
+## 发布版本维护
+
+`package.json.version` 是 WebPilot 发布版本的唯一维护源。要改版时先显式修改该字段（或使用 npm version 的无自动提交方式），再执行：
+
+```sh
+npm run version:sync
+npm run check:version
+npm run typecheck
+npm test
+npm run package:plugin
+```
+
+`version:sync` 只同步 plugin.json、plugin-compat.json 和 package-lock.json 中本项目的两个根版本字段，不更新依赖，也不选择下一个版本。没有改版需求时保持当前版本；版本支持完整 SemVer，预发布与构建后缀均保留。
+
+build、CI 和打包只检查，不会自动同步清单。build 在 dist/core/release.json 中生成执行器版本快照，并检查实际编译模块。`npm run check:version -- --built` 可单独复核源码与构建；直接运行 package-plugin.mjs 也会拒绝旧构建，并校验暂存候选包后再交付。版本身份校验不等于代码内容哈希校验，同版本代码更新仍需重新构建。
+
+用临时目录运行版本测试，不通过改动真实仓库版本制造失败。新报告和新导出记实际执行器版本，历史报告、已导出包及 API/资产/看板协议版本不随发布号更新。

@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
-import {CaseSchema,TargetSchema,SourceSchema,isAssertion,type Plan,type Run,type Case} from './schema.js';
+import {CaseSchema,TargetSchema,TargetResolutionSchema,SourceSchema,isAssertion,type Plan,type Run,type Case} from './schema.js';
 
 const Id=z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/);
 export const CoverageRefSchema=z.object({id:Id,revision:z.number().int().positive()}).strict();
@@ -22,7 +22,7 @@ export const CoverageItemSchema=z.object({
 export const CoverageDraftSchema=z.object({
   schemaVersion:z.literal(1).default(1),title:z.string().trim().min(1).max(120),mode:z.enum(['auto','review','generate-only']).default('auto'),
   status:z.enum(['drafting','published','failed']).default('published'),failureReason:z.string().optional(),
-  target:TargetSchema,scope:z.array(z.string().min(1)).min(1),gaps:z.array(z.string()).default([]),
+  target:TargetSchema,targetResolution:TargetResolutionSchema.optional(),scope:z.array(z.string().min(1)).min(1),gaps:z.array(z.string()).default([]),
   requirements:z.array(z.object({id:Id,description:z.string().min(1),source:SourceSchema,caseIds:z.array(Id),gap:z.string().optional()}).strict()).default([]),
   items:z.array(CoverageItemSchema).min(1),
   generation:z.object({aiSupplemented:z.boolean().default(false),round:z.number().int().positive().default(1),maxRounds:z.number().int().positive().max(10).default(2),maxAdditionalCases:z.number().int().nonnegative().max(100).default(12)}).strict().default({})
@@ -52,7 +52,7 @@ export function caseSemantics(c:Case){return {...c,locatorRepairs:[],steps:c.ste
 export function reviewSemantics(draft:CoverageDraft){return {...draft,items:draft.items.map(i=>({...i,executable:i.executable?caseSemantics(i.executable):undefined}))};}
 export function selectedSemantics(draft:CoverageDraft){return {mode:draft.mode,target:draft.target,scope:draft.scope,items:draft.items.filter(i=>i.selected).map(i=>({...i,executable:i.executable?caseSemantics(i.executable):undefined}))};}
 export function coverageFromPlan(plan:Plan,mode:CoverageDraft['mode']='auto'):CoverageDraft {
-  return CoverageDraftSchema.parse({title:plan.scope.join('、').slice(0,120),mode,target:plan.target,scope:plan.scope,gaps:plan.gaps,
+  return CoverageDraftSchema.parse({title:plan.scope.join('、').slice(0,120),mode,target:plan.target,targetResolution:plan.targetResolution,scope:plan.scope,gaps:plan.gaps,
     requirements:plan.scope.map((description,index)=>({id:`scope-${index+1}`,description,source:{type:'inferred',reference:'已有结构化计划的范围描述，未自动证明逐项需求覆盖'},caseIds:[],gap:'由原计划派生；逐项需求映射待核实'})),
     items:plan.cases.map(c=>({id:c.id,title:c.title,suggestedBy:'derived',priority:'P1',selected:true,selectionReason:'执行原计划用例',readiness:'ready',rationale:'从已有结构化计划确定性派生，未进行 AI 补漏',dimension:'原计划',preconditions:c.preconditions,
       actions:c.steps.filter(s=>!isAssertion(s)).map(s=>`${s.id}：${s.op}`).concat(c.steps.every(isAssertion)?['读取页面状态']:[]),
@@ -63,7 +63,7 @@ export function coveragePlan(snapshot:CoverageSnapshot):Plan {
   const {draft}=snapshot.manifest;
   const cases=draft.items.filter(i=>i.selected).map(i=>i.executable??{schemaVersion:1 as const,id:i.id,version:1,title:i.title,state:'draft' as const,preconditions:[],conflicts:[],locatorRepairs:[],steps:[{id:'unavailable',op:'unsupported' as const,capability:i.reason??'场景尚未就绪'}]});
   if(!cases.length)throw new Error('No selected cases; keep this coverage plan as a preview');
-  return {schemaVersion:1,id:snapshot.manifest.id,target:draft.target,scope:draft.scope,gaps:draft.gaps,cases};
+  return {schemaVersion:1,id:snapshot.manifest.id,target:draft.target,targetResolution:draft.targetResolution,scope:draft.scope,gaps:draft.gaps,cases};
 }
 export function verifyCoveragePlan(snapshot:CoverageSnapshot,plan:Plan){const expected=coveragePlan(snapshot);if(digest(plan.target)!==digest(expected.target)||digest(plan.cases)!==digest(expected.cases)||digest(plan.scope)!==digest(expected.scope))throw new Error('Executable plan does not match the adopted coverage revision');}
 export function coverageResult(snapshot:CoverageSnapshot,run?:Pick<Run,'id'|'cases'>,final=false){

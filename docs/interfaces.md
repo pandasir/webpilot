@@ -2,6 +2,14 @@
 
 MCP 使用本地 stdio；成功返回 `{apiVersion:1,data:...}`，失败返回 `{apiVersion:1,error:{code,message,outcome}}` 并设置 `isError`。步骤执行结果内的业务失败使用 `outcome` 表达。未知字段、操作、较新 schema 和无效参数会被拒绝。完整可执行定义见 `src/core/schema.ts` 与 `src/core/service.ts`。
 
+## 发布版本与协议版本
+
+MCP 初始化中的 serverInfo.version、runtime_info.version、doctor.version 均来自本进程加载的执行器构建快照。源码 package.json.version 是构建来源；后续修改源码版本或更改工作目录，不会使已有执行器改报新版本。更新安装后需在新进程/新连接中核对，旧连接显示旧构建版本属于原进程身份。
+
+构建快照位于执行器 core/release.json，缺失、损坏或版本无效时明确提示重新构建或重装，不返回猜测的版本。该初始化错误可能发生在 MCP 连接建立之前；宿主应展示进程启动诊断，不能把失败连接描述为工具就绪。已启动进程的版本值保持固定，导出前还会确认其实际复制的快照未被替换。
+
+发布版本与 apiVersion、schemaVersion、protocolVersion、Coverage revision、Case.version 分别维护；修正发布身份不会递增协议字段，也不按发布号相同判断兼容。报告中的 environment.runner 和独立导出中的 manifest.generator 使用相同执行器身份，历史值保持原样。
+
 ## MCP 工具
 
 | 工具 | 输入 | 结果 |
@@ -16,7 +24,7 @@ MCP 使用本地 stdio；成功返回 `{apiVersion:1,data:...}`，失败返回 `
 | session_close | `{sessionId}` | 关闭状态、清理错误、已定稿录像 `recordings` 和本地播放器 `playbackPath` |
 | suite_run | `{plan,bindings?:{},headful?:false}` | 完整运行报告 |
 | report_read | `{runId}` | 已保存运行报告、录像元数据和本地播放路径；不返回原始 trace 或视频内容 |
-| case_save | `{case,target,bindings?:{},promote?:false}` | 不可变用例版本、差异、独立验证 run id |
+| case_save | `{case,target,targetResolution?,bindings?:{},promote?:false}` | 不可变用例版本、差异、独立验证 run id；从固定计划晋升时携带其解析元数据 |
 | case_export | `{plan,output,bindings?:{}}` | 新独立目录与未验证导出清单 |
 | export_verify | `{directory,url,bindingsFile?,targetConfig?}` | 独立执行结果与更新后的 verified 标记 |
 
@@ -99,6 +107,21 @@ node dist/cli/index.js prune --days 7
 ```
 
 重跑入口支持 `--plan FILE`、`--run ID`、`--case-file FILE`、`--case ID --version N`。保存单独 case 不绑定目标机器地址；后续重跑必须提供 `--url` 或 `--project / --config`。所有存储命令可用 `--data-dir` 或 `WEBPILOT_DATA_DIR` 覆盖存储位置。可用 `--headful` 显示浏览器。
+
+### 保存配置与本次覆盖
+
+新运行的 plan.json 和覆盖草稿携带可选 `targetResolution:{"schemaVersion":1,"sources":{"viewport":"config","evidence":"config"}}`，target 中保存完整最终配置。原始计划和仅含用例的调用先按实际参数、项目配置、发现、默认值解析；固定计划及按运行 ID 回放使用保存配置，原配置文件后续修改或删除不会静默改变执行。
+
+```sh
+# 使用保存的视口、录像、角色、数据与预算，只覆盖本次 URL
+node dist/cli/index.js replay --run RUN_ID --url http://localhost:3001 --no-dashboard
+# 明确选用新配置：显式参数优先，其次新文件实际提供字段，其余沿用保存配置
+node dist/cli/index.js replay --run RUN_ID --config /path/to/new-target.json --no-dashboard
+```
+
+嵌套对象仍整体替换，未做深度合并；覆盖记录在新运行中，不改原资产。原始 Plan/CoverageDraft 可不带 targetResolution，缺少的 target 设置不会提前变成显式默认值。MCP suite_run 的 plan 同样支持该元数据，case_save 晋升固定配置时可携带相同字段。未知解析版本或无效固定目标直接拒绝。
+
+旧 schemaVersion:1 原始计划继续可读并按本次配置解析；旧运行 ID 回放以保存计划为准，并在新报告 gaps 和 stderr 说明原配置来源不可完整追溯，无法自动恢复旧首次执行未保存的设置。新格式可能被旧执行器的 strict schema 拒绝，需使用支持 targetResolution 的版本；不会删除元数据以伪装兼容。
 
 流程录像默认开启，`target.evidence.video:false` 可关闭。`replay` 命令重新执行测试；观看上一次流程录像无需重新执行，直接用浏览器打开结果中的 `playbackPath`（本地 `recordings.html`）。录像在浏览器上下文关闭后定稿，按尝试及页面保存为 WebM，并按 `retentionDays` 清理。原始视频未经脱敏，仅本地保存，MCP 返回元数据和路径。
 
